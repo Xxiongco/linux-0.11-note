@@ -1,4 +1,9 @@
-![](https://img.shields.io/github/stars/mengchaobbbigrui/Linux-0.11code)      ![](https://img.shields.io/github/forks/mengchaobbbigrui/Linux-0.11code)      ![](https://img.shields.io/github/issues/mengchaobbbigrui/Linux-0.11code)
+## 说明
+
+本项目fork了Linux0.11的源代码，在此基础上加入了大量中文注释，注释主要来源是《linux内核完全注释》，一小部分是本人自己添加的。
+
+对于linux内核源码有兴趣的朋友可以看一看
+
 ## Linux0.11
 **“RTFSC – Read The Fucking Source Code :)!”               –Linus Benedict Torvalds**
 
