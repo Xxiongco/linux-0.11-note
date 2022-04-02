@@ -14,7 +14,7 @@
 
 /* we use this so that we can do without the ctype library */
 #define is_digit(c)	((c) >= '0' && (c) <= '9')
-
+//将字符串转换成整数  若碰到非数字，停止
 static int skip_atoi(const char **s)
 {
 	int i=0;
@@ -24,6 +24,15 @@ static int skip_atoi(const char **s)
 	return i;
 }
 
+// example:
+// int main(void) {
+// 	const char *s = "123a4";
+// 	int a = skip_atoi(&s);
+// 	printf("%d\n",a);
+// 	return 0;
+// }	
+//  out: 123
+
 #define ZEROPAD	1		/* pad with zero */
 #define SIGN	2		/* unsigned/signed long */
 #define PLUS	4		/* show plus */
@@ -32,11 +41,16 @@ static int skip_atoi(const char **s)
 #define SPECIAL	32		/* 0x */
 #define SMALL	64		/* use 'abcdef' instead of 'ABCDEF' */
 
+
+// 除操作。输入：n 为被除数，base 为除数；结果：n 为商，函数返回值为余数
 #define do_div(n,base) ({ \
 int __res; \
 __asm__("divl %4":"=a" (n),"=d" (__res):"0" (n),"1" (0),"r" (base)); \
 __res; })
 
+ // 将整数转换为指定进制的字符串。 
+ // 输入：num-整数；base-进制；size-字符串长度；precision-数字长度(精度)；type-类型选项。 
+ // 输出：str 字符串指针
 static char * number(char * str, int num, int base, int size, int precision
 	,int type)
 {
@@ -48,7 +62,7 @@ static char * number(char * str, int num, int base, int size, int precision
 	if (type&LEFT) type &= ~ZEROPAD;
 	if (base<2 || base>36)
 		return 0;
-	c = (type & ZEROPAD) ? '0' : ' ' ;
+	c = (type & ZEROPAD) ? '0' : ' ' ;         // 如果类型指出要填零，则置字符变量 c='0'（也即''），否则 c 等于空格字符。
 	if (type&SIGN && num<0) {
 		sign='-';
 		num = -num;
@@ -62,15 +76,16 @@ static char * number(char * str, int num, int base, int size, int precision
 	if (num==0)
 		tmp[i++]='0';
 	else while (num!=0)
-		tmp[i++]=digits[do_div(num,base)];
-	if (i>precision) precision=i;
+		tmp[i++]=digits[do_div(num,base)];       //                                                 ===========key=============
+	if (i>precision) precision=i;  //若数值字符个数大于精度值，则精度值扩展为数字个数值
 	size -= precision;
-	if (!(type&(ZEROPAD+LEFT)))
+	// 从这里真正开始形成所需要的转换结果，并暂时放在字符串 str 中
+	if (!(type&(ZEROPAD+LEFT)))   // 若类型中没有填零(ZEROPAD)和左靠齐（左调整）标志，则在 str 中首先填放剩余宽度值指出的空格数。若需带符号位，则存入符号。
 		while(size-->0)
 			*str++ = ' ';
 	if (sign)
 		*str++ = sign;
-	if (type&SPECIAL)
+	if (type&SPECIAL)             // 若类型指出是特殊转换，则对于八进制转换结果头一位放置一个'0'；而对于十六进制则存放'0x'
 		if (base==8)
 			*str++ = '0';
 		else if (base==16) {
@@ -83,21 +98,37 @@ static char * number(char * str, int num, int base, int size, int precision
 	while(i<precision--)
 		*str++ = '0';
 	while(i-->0)
-		*str++ = tmp[i];
+		*str++ = tmp[i];      // 将转数值换好的数字字符填入 str 中。共 i 个, reverse                      ===========key=============
 	while(size-->0)
 		*str++ = ' ';
 	return str;
 }
 
+
+//example
+// int main(void) {
+//     char *s = malloc(20);
+//     char *s2;
+//     s2 = number(s, 100, 16, 7, 5, 32);
+//     for (int i = 0; i < 7; ++i) {
+//         printf("%c",(s-7)[i]);
+//     }
+//     printf("\n");
+//     return 0;
+// }
+// out: 0X00064        num = 100, base = 16, size = 7, precise = 5, type = 32
+
+
+// 下面函数是送格式化输出到字符串中。 v for variable, s for string end with '\0'
 int vsprintf(char *buf, const char *fmt, va_list args)
 {
 	int len;
 	int i;
-	char * str;
+	char * str;            // 用于存放转换过程中的字符串
 	char *s;
 	int *ip;
 
-	int flags;		/* flags to number() */
+	int flags;		/* flags to number() */    /* number()函数使用的标志 */
 
 	int field_width;	/* width of output field */
 	int precision;		/* min. # of digits for integers; max
@@ -127,7 +158,7 @@ int vsprintf(char *buf, const char *fmt, va_list args)
 		if (is_digit(*fmt))
 			field_width = skip_atoi(&fmt);
 		else if (*fmt == '*') {
-			/* it's the next argument */
+			/* it's the next argument */     //float??
 			field_width = va_arg(args, int);
 			if (field_width < 0) {
 				field_width = -field_width;
@@ -231,3 +262,24 @@ int vsprintf(char *buf, const char *fmt, va_list args)
 	*str = '\0';
 	return str-buf;
 }
+
+
+
+// example:       the usage of %n
+// int main()
+// {
+//     int check;
+//     int a, b;
+  
+//     // Input two variables
+//     scanf("%d%d%n", &a, &b, &check);
+  
+//     // Print value of a, b, and check
+//     printf("%d\n%d\n%d", a, b, check);
+//     return 0;
+// }
+
+// in: 24   56
+// out: 24
+// 	 56
+// 	 7

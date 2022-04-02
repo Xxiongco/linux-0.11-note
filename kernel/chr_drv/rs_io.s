@@ -9,6 +9,7 @@
  *
  * This module implements the rs232 io interrupts.
  */
+;  该汇编程序实现 rs232 串行通信中断处理程序
 
 .text
 .globl _rs1_interrupt,_rs2_interrupt

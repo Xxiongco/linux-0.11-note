@@ -9,6 +9,9 @@
  * point to 'interesting' things. Make a printf with fs-saving, and
  * all is well.
  */
+// FS: Extra data #2    指向的GDT/IDT中的段描述符
+// GS: Extra data #3
+
 #include <stdarg.h>
 #include <stddef.h>
 
@@ -20,7 +23,7 @@ extern int vsprintf(char * buf, const char * fmt, va_list args);
 
 int printk(const char *fmt, ...)
 {
-	va_list args;
+	va_list args;    // va_list 实际上是一个字符指针类型
 	int i;
 
 	va_start(args, fmt);
@@ -32,7 +35,7 @@ int printk(const char *fmt, ...)
 		"pushl %0\n\t"
 		"pushl $_buf\n\t"
 		"pushl $0\n\t"
-		"call _tty_write\n\t"
+		"call _tty_write\n\t"    // 调用 tty_write 函数。(kernel/chr_drv/tty_io.c,290) 真正的打印函数
 		"addl $8,%%esp\n\t"
 		"popl %0\n\t"
 		"pop %%fs"

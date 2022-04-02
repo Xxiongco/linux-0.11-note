@@ -48,6 +48,7 @@ int sys_prof()
 	return -ENOSYS;
 }
 
+// 设置当前任务的实际以及/或者有效组 ID（gid）。
 int sys_setregid(int rgid, int egid)
 {
 	if (rgid>0) {
@@ -69,6 +70,7 @@ int sys_setregid(int rgid, int egid)
 	return 0;
 }
 
+// 设置进程组号(gid)。
 int sys_setgid(int gid)
 {
 	return(sys_setregid(gid, gid));
@@ -99,6 +101,7 @@ int sys_ulimit()
 	return -ENOSYS;
 }
 
+//如果 tloc 不为 null，则时间值也存储在那里
 int sys_time(long * tloc)
 {
 	int i;
@@ -106,14 +109,14 @@ int sys_time(long * tloc)
 	i = CURRENT_TIME;
 	if (tloc) {
 		verify_area(tloc,4);
-		put_fs_long(i,(unsigned long *)tloc);
+		put_fs_long(i,(unsigned long *)tloc);  // 也放入用户数据段 tloc 处
 	}
 	return i;
 }
 
 /*
  * Unprivileged users may change the real user id to the effective uid
- * or vice versa.
+ * or vice versa.    ????
  */
 int sys_setreuid(int ruid, int euid)
 {
@@ -145,14 +148,16 @@ int sys_setuid(int uid)
 	return(sys_setreuid(uid, uid));
 }
 
+// 设置系统时间和日期。
 int sys_stime(long * tptr)
 {
-	if (!suser())
+	if (!suser())    //super user
 		return -EPERM;
-	startup_time = get_fs_long((unsigned long *)tptr) - jiffies/HZ;
+	startup_time = get_fs_long((unsigned long *)tptr) - jiffies/HZ;     //开始时间为负值
 	return 0;
 }
 
+//// 获取当前任务时间
 int sys_times(struct tms * tbuf)
 {
 	if (tbuf) {
@@ -165,11 +170,12 @@ int sys_times(struct tms * tbuf)
 	return jiffies;
 }
 
+
 int sys_brk(unsigned long end_data_seg)
 {
 	if (end_data_seg >= current->end_code &&
 	    end_data_seg < current->start_stack - 16384)
-		current->brk = end_data_seg;
+		current->brk = end_data_seg;               //// 设置新数据段结尾值
 	return current->brk;
 }
 
@@ -198,11 +204,13 @@ int sys_setpgid(int pid, int pgid)
 	return -ESRCH;
 }
 
+// 返回当前进程的组号
 int sys_getpgrp(void)
 {
 	return current->pgrp;
 }
 
+// 创建一个会话(session)（即设置其 leader=1），并且设置其会话=其组号=其进程号
 int sys_setsid(void)
 {
 	if (current->leader && !suser())
@@ -222,11 +230,12 @@ int sys_uname(struct utsname * name)
 
 	if (!name) return -ERROR;
 	verify_area(name,sizeof *name);
-	for(i=0;i<sizeof *name;i++)
+	for(i=0;i<sizeof *name;i++)        // 将 thisname 中的信息逐字节复制到用户缓冲区(name)中
 		put_fs_byte(((char *) &thisname)[i],i+(char *) name);
 	return 0;
 }
 
+// 设置当前进程创建文件属性屏蔽码为 mask & 0777。并返回原屏蔽码, 0777 = 0001 1111 1111
 int sys_umask(int mask)
 {
 	int old = current->umask;

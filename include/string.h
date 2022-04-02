@@ -125,6 +125,8 @@ __asm__("cld\n"
 return __res;
 }
 
+// 在字符串中寻找第一个匹配的字符
+// 返回：返回字符串中第一次出现匹配字符的指针。若没有找到匹配的字符，则返回空指针
 extern inline char * strchr(const char * s,char c)
 {
 register char * __res __asm__("ax");
@@ -233,6 +235,7 @@ __asm__("cld\n\t"
 return __res;
 }
 
+// 在字符串 1 中寻找首个匹配整个字符串 2 的字符串
 extern inline char * strstr(const char * cs,const char * ct)
 {
 register char * __res __asm__("ax");
@@ -274,6 +277,18 @@ return __res;
 
 extern char * ___strtok;
 
+// #include <string.h>
+// main(){
+//     char s[] = "ab-cd : ef;gh :i-jkl;mnop;qrs-tu: vwx-y;z";
+//     char *delim = "-: ";
+//     char *p;
+//     printf("%s ", strtok(s, delim));
+//     while((p = strtok(NULL, delim)))
+//         printf("%s ", p);
+//         printf("\n");
+// }
+// 执行结果：
+// ab cd ef;gh i jkl;mnop;qrs tu vwx y;z     //－与:字符已经被\0 字符取代
 extern inline char * strtok(char * s,const char * ct)
 {
 register char * __res __asm__("si");
@@ -343,6 +358,10 @@ __asm__("cld\n\t"
 return dest;
 }
 
+// char str[] = "memmove can be very useful......";
+// memmove (str+20,str+15,11);
+// 运行结果：
+// memmove can be very very useful.
 extern inline void * memmove(void * dest,const void * src, int n)
 {
 if (dest<src)

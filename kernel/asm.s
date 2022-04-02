@@ -9,6 +9,7 @@
  * page_exception is handled by the mm, so that isn't here. This
  * file also handles (hopefully) fpu-exceptions due to TS-bit, as
  * the fpu must be properly saved/resored. This hasn't been tested.
+ * 本代码文件主要涉及对 Intel 保留的中断 int0--int16 的处理（int17-int31 留作今后使用）
  */
 
 .globl _divide_error,_debug,_nmi,_int3,_overflow,_bounds,_invalid_op
@@ -53,7 +54,7 @@ no_error_code:
 _debug:
 	pushl $_do_int3		# _do_debug
 	jmp no_error_code
-
+; 非屏蔽中断调用入口点
 _nmi:
 	pushl $_do_nmi
 	jmp no_error_code
@@ -73,7 +74,7 @@ _bounds:
 _invalid_op:
 	pushl $_do_invalid_op
 	jmp no_error_code
-
+; 协处理器段超出出错中断入口点
 _coprocessor_segment_overrun:
 	pushl $_do_coprocessor_segment_overrun
 	jmp no_error_code
@@ -93,7 +94,8 @@ _irq13:
 1:	outb %al,$0xA0
 	popl %eax
 	jmp _coprocessor_error
-
+	
+; 以下中断在调用时会在中断返回地址之后将出错号压入堆栈，因此返回时也需要将出错号弹出
 _double_fault:
 	pushl $_do_double_fault
 error_code:

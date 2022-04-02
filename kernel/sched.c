@@ -20,6 +20,7 @@
 
 #include <signal.h>
 
+//  取信号 nr 在信号位图中对应位的二进制数值。信号编号 1-32    比如信号 5 的位图数值 = 1<<(5-1) = 16 = 00010000b
 #define _S(nr) (1<<((nr)-1))
 #define _BLOCKABLE (~(_S(SIGKILL) | _S(SIGSTOP)))
 
@@ -34,6 +35,7 @@ void show_task(int nr,struct task_struct * p)
 	printk("%d (of %d) chars free in kernel stack\n\r",i,j);
 }
 
+// 显示所有任务的任务号、进程号、进程状态和内核堆栈空闲字节数
 void show_stat(void)
 {
 	int i;
@@ -43,6 +45,7 @@ void show_stat(void)
 			show_task(i,task[i]);
 }
 
+//  定义每个时间片的滴答数
 #define LATCH (1193180/HZ)
 
 extern void mem_use(void);
@@ -58,15 +61,15 @@ union task_union {
 static union task_union init_task = {INIT_TASK,};
 
 long volatile jiffies=0;
-long startup_time=0;
+long startup_time=0;                       // 开机时间。从 1970:0:0:0 开始计时的秒数
 struct task_struct *current = &(init_task.task);
-struct task_struct *last_task_used_math = NULL;
+struct task_struct *last_task_used_math = NULL;      // 使用过协处理器任务的指针
 
 struct task_struct * task[NR_TASKS] = {&(init_task.task), };
 
-long user_stack [ PAGE_SIZE>>2 ] ;
+long user_stack [ PAGE_SIZE>>2 ] ;    //定义用户堆栈数组（1024 项）
 
-struct {
+struct {                             // 堆栈开始结构（地址指针，数据段选择符）
 	long * a;
 	short b;
 	} stack_start = { & user_stack [PAGE_SIZE>>2] , 0x10 };
@@ -109,12 +112,12 @@ void schedule(void)
 /* check alarm, wake up any interruptible tasks that have got a signal */
 
 	for(p = &LAST_TASK ; p > &FIRST_TASK ; --p)
-		if (*p) {
+		if (*p) {                  // 如果任务的 alarm 时间已经过期(alarm<jiffies),在信号位图中置 SIGALRM 信号，然后清 alarm
 			if ((*p)->alarm && (*p)->alarm < jiffies) {
 					(*p)->signal |= (1<<(SIGALRM-1));
 					(*p)->alarm = 0;
 				}
-			if (((*p)->signal & ~(_BLOCKABLE & (*p)->blocked)) &&
+			if (((*p)->signal & ~(_BLOCKABLE & (*p)->blocked)) &&        //则置任务为就绪状态
 			(*p)->state==TASK_INTERRUPTIBLE)
 				(*p)->state=TASK_RUNNING;
 		}
@@ -129,11 +132,11 @@ void schedule(void)
 		while (--i) {
 			if (!*--p)
 				continue;
-			if ((*p)->state == TASK_RUNNING && (*p)->counter > c)
+			if ((*p)->state == TASK_RUNNING && (*p)->counter > c)   //get counter_max 值
 				c = (*p)->counter, next = i;
 		}
 		if (c) break;
-		for(p = &LAST_TASK ; p > &FIRST_TASK ; --p)
+		for(p = &LAST_TASK ; p > &FIRST_TASK ; --p)                //calculate counter
 			if (*p)
 				(*p)->counter = ((*p)->counter >> 1) +
 						(*p)->priority;
@@ -148,6 +151,7 @@ int sys_pause(void)
 	return 0;
 }
 
+// 将当前任务置为不可中断的等待状态, 只有明确地唤醒时才会返回
 void sleep_on(struct task_struct **p)
 {
 	struct task_struct *tmp;
@@ -164,6 +168,7 @@ void sleep_on(struct task_struct **p)
 		tmp->state=0;
 }
 
+// 将当前任务置为可中断的等待状态
 void interruptible_sleep_on(struct task_struct **p)
 {
 	struct task_struct *tmp;
@@ -182,14 +187,15 @@ repeat:	current->state = TASK_INTERRUPTIBLE;
 	}
 	*p=NULL;
 	if (tmp)
-		tmp->state=0;
+		tmp->state=0;           //TASK_RUNNING
 }
 
+// 将状态置为 TASK_RUNNING
 void wake_up(struct task_struct **p)
 {
 	if (p && *p) {
 		(**p).state=0;
-		*p=NULL;
+		*p=NULL;                //?????????????  相当于释放指针, for floppy
 	}
 }
 
@@ -261,14 +267,15 @@ void do_floppy_timer(void)
 	}
 }
 
-#define TIME_REQUESTS 64
+#define TIME_REQUESTS 64   // 最多可有 64 个定时器链表（64 个任务）
 
 static struct timer_list {
-	long jiffies;
+	long jiffies;                 // 定时滴答数
 	void (*fn)();
 	struct timer_list * next;
 } timer_list[TIME_REQUESTS], * next_timer = NULL;
 
+//
 void add_timer(long jiffies, void (*fn)(void))
 {
 	struct timer_list * p;
@@ -276,19 +283,19 @@ void add_timer(long jiffies, void (*fn)(void))
 	if (!fn)
 		return;
 	cli();
-	if (jiffies <= 0)
+	if (jiffies <= 0)              // 如果定时值<=0，则立刻调用其处理程序。并且该定时器不加入链表中
 		(fn)();
 	else {
 		for (p = timer_list ; p < timer_list + TIME_REQUESTS ; p++)
-			if (!p->fn)
+			if (!p->fn)              // 从定时器数组中，找一个空闲项
 				break;
-		if (p >= timer_list + TIME_REQUESTS)
+		if (p >= timer_list + TIME_REQUESTS)            // 如果已经用完了定时器数组，则系统崩溃
 			panic("No more time requests free");
 		p->fn = fn;
 		p->jiffies = jiffies;
 		p->next = next_timer;
 		next_timer = p;
-		while (p->next && p->next->jiffies < p->jiffies) {
+		while (p->next && p->next->jiffies < p->jiffies) {         // 链表项按定时值从小到大排序
 			p->jiffies -= p->next->jiffies;
 			fn = p->fn;
 			p->fn = p->next->fn;
@@ -302,10 +309,11 @@ void add_timer(long jiffies, void (*fn)(void))
 	sti();
 }
 
-void do_timer(long cpl)
+// 时钟中断 C 函数处理程序
+void do_timer(long cpl)      //current priority level
 {
-	extern int beepcount;
-	extern void sysbeepstop(void);
+	extern int beepcount;            // 扬声器发声时间滴答数
+	extern void sysbeepstop(void);   //关闭扬声器
 
 	if (beepcount)
 		if (!--beepcount)
@@ -375,6 +383,7 @@ int sys_getegid(void)
 	return current->egid;
 }
 
+// 系统调用功能 -- 降低对 CPU 的使用优先权
 int sys_nice(long increment)
 {
 	if (current->priority-increment>0)
@@ -389,9 +398,10 @@ void sched_init(void)
 
 	if (sizeof(struct sigaction) != 16)
 		panic("Struct sigaction MUST be 16 bytes");
-	set_tss_desc(gdt+FIRST_TSS_ENTRY,&(init_task.task.tss));
+	set_tss_desc(gdt+FIRST_TSS_ENTRY,&(init_task.task.tss));           // 设置初始任务
 	set_ldt_desc(gdt+FIRST_LDT_ENTRY,&(init_task.task.ldt));
 	p = gdt+2+FIRST_TSS_ENTRY;
+	// 清任务数组和描述符表项（注意 i=1 开始，所以初始任务的描述符还在）。
 	for(i=1;i<NR_TASKS;i++) {
 		task[i] = NULL;
 		p->a=p->b=0;
@@ -400,9 +410,13 @@ void sched_init(void)
 		p++;
 	}
 /* Clear NT, so that we won't have troubles with that later on */
+/* 清除标志寄存器中的位 NT，这样以后就不会有麻烦 */
 	__asm__("pushfl ; andl $0xffffbfff,(%esp) ; popfl");
+	//给 idtr 寄存器赋值
 	ltr(0);
+	//给 gdtr 寄存器赋值
 	lldt(0);
+	// 下面代码用于初始化 8253 定时器
 	outb_p(0x36,0x43);		/* binary, mode 3, LSB/MSB, ch 0 */
 	outb_p(LATCH & 0xff , 0x40);	/* LSB */
 	outb(LATCH >> 8 , 0x40);	/* MSB */

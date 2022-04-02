@@ -4,7 +4,8 @@
  *  (C) 1991  Linus Torvalds
  */
 
-#define __LIBRARY__
+// LIBRARY is for asm in unistd.h
+#define __LIBRARY__                                     
 #include <unistd.h>
 #include <time.h>
 
@@ -20,24 +21,24 @@
  * won't be any messing with the stack from main(), but we define
  * some others too.
  */
-static inline _syscall0(int,fork)
+static inline _syscall0(int,fork)                  //inline is like #define, but expande in compile, and more flexible with variables
 static inline _syscall0(int,pause)
-static inline _syscall1(int,setup,void *,BIOS)
-static inline _syscall0(int,sync)
+static inline _syscall1(int,setup,void *,BIOS)     //0 for 0 variable, 1 for 1 variable
+static inline _syscall0(int,sync)                  //update filesystem in hardware disk 
 
 #include <linux/tty.h>
-#include <linux/sched.h>
-#include <linux/head.h>
-#include <asm/system.h>
+#include <linux/sched.h>                           //task_struct
+#include <linux/head.h>                            //GDT，LDT
+#include <asm/system.h>                        
 #include <asm/io.h>
 
 #include <stddef.h>
 #include <stdarg.h>
 #include <unistd.h>
-#include <fcntl.h>
+#include <fcntl.h>                                  //file control
 #include <sys/types.h>
 
-#include <linux/fs.h>
+#include <linux/fs.h>                               //file system
 
 static char printbuf[1024];
 
@@ -55,7 +56,7 @@ extern long startup_time;
 /*
  * This is set up by the setup-routine at boot-time
  */
-#define EXT_MEM_K (*(unsigned short *)0x90002)
+#define EXT_MEM_K (*(unsigned short *)0x90002)                   //1M 以后的扩展内存大小
 #define DRIVE_INFO (*(struct drive_info *)0x90080)
 #define ORIG_ROOT_DEV (*(unsigned short *)0x901FC)
 
@@ -71,7 +72,7 @@ outb_p(0x80|addr,0x70); \
 inb_p(0x71); \
 })
 
-#define BCD_TO_BIN(val) ((val)=((val)&15) + ((val)>>4)*10)
+#define BCD_TO_BIN(val) ((val)=((val)&15) + ((val)>>4)*10)     //4 bit for a decimal number 0~9, at most 99
 
 static void time_init(void)
 {
@@ -136,7 +137,7 @@ void main(void)		/* This really IS void, no error here. */
 	sti();
 	move_to_user_mode();
 	if (!fork()) {		/* we count on this going ok */
-		init();
+		init();                                               //child process
 	}
 /*
  *   NOTE!!   For any other task 'pause()' would mean we have to get a
@@ -153,8 +154,8 @@ static int printf(const char *fmt, ...)
 	va_list args;
 	int i;
 
-	va_start(args, fmt);
-	write(1,printbuf,i=vsprintf(printbuf, fmt, args));
+	va_start(args, fmt);                                        //va_start, va_arg, va_end 用于不定长参数
+	write(1,printbuf,i=vsprintf(printbuf, fmt, args));          //1 for stdout
 	va_end(args);
 	return i;
 }
@@ -170,23 +171,23 @@ void init(void)
 	int pid,i;
 
 	setup((void *) &drive_info);
-	(void) open("/dev/tty0",O_RDWR,0);
-	(void) dup(0);
-	(void) dup(0);
+	(void) open("/dev/tty0",O_RDWR,0);                        // 返回的句柄号 0 -- stdin 标准输入设备
+	(void) dup(0);                                            // 复制句柄，产生句柄 1 号 -- stdout 标准输出设备
+	(void) dup(0);                                            // 复制句柄，产生句柄 2 号 -- stderr 标准出错输出设备
 	printf("%d buffers = %d bytes buffer space\n\r",NR_BUFFERS,
-		NR_BUFFERS*BLOCK_SIZE);
+		NR_BUFFERS*BLOCK_SIZE);                               // 打印缓冲区块数和总字节数，每块 1024 字节
 	printf("Free mem: %d bytes\n\r",memory_end-main_memory_start);
-	if (!(pid=fork())) {
+	if (!(pid=fork())) {                                      //child process
 		close(0);
 		if (open("/etc/rc",O_RDONLY,0))
 			_exit(1);
 		execve("/bin/sh",argv_rc,envp_rc);
 		_exit(2);
 	}
-	if (pid>0)
-		while (pid != wait(&i))
+	if (pid>0)                                                //parent process
+		while (pid != wait(&i))                               //父进程等待子进程的结束。&i 是存放返回状态信息的位置。
 			/* nothing */;
-	while (1) {
+	while (1) {                                               //创建的子进程的执行已停止或终止,再创建一个子进程
 		if ((pid=fork())<0) {
 			printf("Fork failed in init\r\n");
 			continue;

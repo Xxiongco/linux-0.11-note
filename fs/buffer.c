@@ -26,7 +26,8 @@
 #include <asm/system.h>
 #include <asm/io.h>
 
-extern int end;
+// buffer_memory  end~2M
+extern int end;                   //外部传入，动态生成  整个内核代码的末尾地址
 struct buffer_head * start_buffer = (struct buffer_head *) &end;
 struct buffer_head * hash_table[NR_HASH];
 static struct buffer_head * free_list;
@@ -41,6 +42,7 @@ static inline void wait_on_buffer(struct buffer_head * bh)
 	sti();
 }
 
+//刷缓存
 int sys_sync(void)
 {
 	int i;
@@ -351,11 +353,11 @@ void buffer_init(long buffer_end)
 	void * b;
 	int i;
 
-	if (buffer_end == 1<<20)
-		b = (void *) (640*1024);
+	if (buffer_end == 1<<20)      //2M
+		b = (void *) (640*1024);   // = A0000,  640k
 	else
 		b = (void *) buffer_end;
-	while ( (b -= BLOCK_SIZE) >= ((void *) (h+1)) ) {
+	while ( (b -= BLOCK_SIZE) >= ((void *) (h+1)) ) {    //BLOCK_SIZE = 1024
 		h->b_dev = 0;
 		h->b_dirt = 0;
 		h->b_count = 0;

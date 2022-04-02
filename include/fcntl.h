@@ -1,5 +1,6 @@
 #ifndef _FCNTL_H
 #define _FCNTL_H
+//file descriptor control?
 
 #include <sys/types.h>
 

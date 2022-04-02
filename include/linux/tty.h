@@ -43,13 +43,13 @@ struct tty_queue {
 #define SUSPEND_CHAR(tty) ((tty)->termios.c_cc[VSUSP])
 
 struct tty_struct {
-	struct termios termios;
-	int pgrp;
-	int stopped;
-	void (*write)(struct tty_struct * tty);
-	struct tty_queue read_q;
+	struct termios termios;   // 终端 io 属性和控制字符数据结构
+	int pgrp;                 // 所属进程组。
+	int stopped;              // 停止标志
+	void (*write)(struct tty_struct * tty);   // tty 写函数指针
+	struct tty_queue read_q;                  // tty 读队列
 	struct tty_queue write_q;
-	struct tty_queue secondary;
+	struct tty_queue secondary;               // tty 辅助队列(存放规范模式字符序列)
 	};
 
 extern struct tty_struct tty_table[];
@@ -60,6 +60,13 @@ extern struct tty_struct tty_table[];
 	reprint=^R	discard=^U	werase=^W	lnext=^V
 	eol2=\0
 */
+/* 中断 intr=^C 退出 quit=^| 删除 erase=del 终止 kill=^U 
+ * 文件结束 eof=^D vtime=\0 vmin=\1 sxtc=\0 
+ * 开始 start=^Q 停止 stop=^S 挂起 susp=^Z 行结束 eol=\0 
+ * 重显 reprint=^R 丢弃 discard=^U werase=^W lnext=^V 
+ * 行结束 eol2=\0 
+ */ 
+ // 控制字符对应的 ASCII 码值。[8 进制]
 #define INIT_C_CC "\003\034\177\025\004\0\1\0\021\023\032\0\022\017\027\026\0"
 
 void rs_init(void);

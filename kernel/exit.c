@@ -16,6 +16,7 @@
 int sys_pause(void);
 int sys_close(int fd);
 
+//// 释放指定进程(任务)。
 void release(struct task_struct * p)
 {
 	int i;
@@ -32,6 +33,7 @@ void release(struct task_struct * p)
 	panic("trying to release non-existent task");
 }
 
+// 向指定任务(*p)发送信号(sig)，权限为 priv
 static inline int send_sig(long sig,struct task_struct * p,int priv)
 {
 	if (!p || sig<1 || sig>32)
@@ -48,8 +50,9 @@ static void kill_session(void)
 	struct task_struct **p = NR_TASKS + task;
 	
 	while (--p > &FIRST_TASK) {
+		// 对于所有的任务（除任务 0 以外），如果其会话等于当前进程的会话就其发送挂断进程信号
 		if (*p && (*p)->session == current->session)
-			(*p)->signal |= 1<<(SIGHUP-1);
+			(*p)->signal |= 1<<(SIGHUP-1);             // 发送挂断进程信号
 	}
 }
 
@@ -57,6 +60,12 @@ static void kill_session(void)
  * XXX need to check permissions needed to send signals to process
  * groups, etc. etc.  kill() permissions semantics are tricky!
  */
+ //// kill()系统调用可用于向任何进程组或进程发送任何信号。 
+ // 如果 pid 值>0，则信号被发送给 pid。 
+ // 如果 pid=0，那么信号就会被发送给当前进程的进程组中的所有进程。 
+ // 如果 pid=-1，则信号 sig 就会发送给除第一个进程外的所有进程。 
+ // 如果 pid < -1，则信号 sig 将发送给进程组-pid 的所有进程。 
+ // 如果信号 sig 为 0，则不发送信号，但仍会进行错误检查。如果成功则返回 0。
 int sys_kill(int pid,int sig)
 {
 	struct task_struct **p = NR_TASKS + task;
@@ -79,6 +88,7 @@ int sys_kill(int pid,int sig)
 				retval = err;
 	return retval;
 }
+
 
 static void tell_father(int pid)
 {
@@ -112,9 +122,12 @@ int do_exit(long code)
 				/* assumption task[1] is always init */
 				(void) send_sig(SIGCHLD, task[1], 1);
 		}
+	// 关闭当前进程打开着的所有文件	
 	for (i=0 ; i<NR_OPEN ; i++)
 		if (current->filp[i])
 			sys_close(i);
+
+	// 同步当前进程工作目录 pwd、根目录 root 以及运行程序的 i 节点并分别置空		
 	iput(current->pwd);
 	current->pwd=NULL;
 	iput(current->root);
@@ -139,6 +152,16 @@ int sys_exit(int error_code)
 	return do_exit((error_code&0xff)<<8);
 }
 
+ //// 系统调用 waitpid()。挂起当前进程，直到 pid 指定的子进程退出（终止）或者收到要求终止 
+ // 该进程的信号，或者是需要调用一个信号句柄（信号处理程序）。如果 pid 所指的子进程早已 
+ // 退出（已成所谓的僵死进程），则本调用将立刻返回。子进程使用的所有资源将释放。 
+ // 如果 pid > 0, 表示等待进程号等于 pid 的子进程。 
+ // 如果 pid = 0, 表示等待进程组号等于当前进程的任何子进程。 
+ // 如果 pid < -1, 表示等待进程组号等于 pid 绝对值的任何子进程。 
+ // [ 如果 pid = -1, 表示等待任何子进程。] 
+ // 若 options = WUNTRACED，表示如果子进程是停止的，也马上返回。 
+ // 若 options = WNOHANG，表示如果没有子进程退出或终止就马上返回。 
+ // 如果 stat_addr 不为空，则就将状态信息保存到那里。
 int sys_waitpid(pid_t pid,unsigned long * stat_addr, int options)
 {
 	int flag, code;
@@ -181,7 +204,7 @@ repeat:
 				continue;
 		}
 	}
-	if (flag) {
+	if (flag) {               // 如果子进程没有处于退出或僵死状态
 		if (options & WNOHANG)
 			return 0;
 		current->state=TASK_INTERRUPTIBLE;

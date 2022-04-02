@@ -5,7 +5,7 @@
  */
 
 /*
- * 'tty_io.c' gives an orthogonal feeling to tty's, be they consoles
+ * 'tty_io.c' gives an orthogonal (正交的) feeling to tty's, be they consoles
  * or rs-channels. It also implements echoing, cooked mode etc.
  *
  * Kill-line thanks to John T Kohl.
@@ -48,6 +48,8 @@
 #define O_NLRET(tty)	_O_FLAG((tty),ONLRET)
 #define O_LCUC(tty)	_O_FLAG((tty),OLCUC)
 
+ // tty 数据结构的 tty_table 数组。其中包含三个初始化项数据，分别对应控制台、串口终端 1 和 
+ // 串口终端 2 的初始化数据。
 struct tty_struct tty_table[] = {
 	{
 		{ICRNL,		/* change incoming CR to NL */
@@ -96,6 +98,7 @@ struct tty_struct tty_table[] = {
  * you can implement pseudo-tty's or something by changing
  * them. Currently not done.
  */
+// tty 缓冲队列地址表。rs_io.s 汇编程序使用，用于取得读写缓冲队列地址。
 struct tty_queue * table_list[]={
 	&tty_table[0].read_q, &tty_table[0].write_q,
 	&tty_table[1].read_q, &tty_table[1].write_q,
@@ -104,10 +107,11 @@ struct tty_queue * table_list[]={
 
 void tty_init(void)
 {
-	rs_init();
-	con_init();
+	rs_init();          // 初始化串行中断程序和串行接口 1 和 2。(serial.c, 37)
+	con_init();         // 初始化控制台终端。(console.c, 617)
 }
 
+//根据process group设置signal
 void tty_intr(struct tty_struct * tty, int mask)
 {
 	int i;
@@ -119,6 +123,7 @@ void tty_intr(struct tty_struct * tty, int mask)
 			task[i]->signal |= mask;
 }
 
+/// 如果队列缓冲区空则让进程进入可中断的睡眠状态
 static void sleep_if_empty(struct tty_queue * queue)
 {
 	cli();
@@ -127,6 +132,7 @@ static void sleep_if_empty(struct tty_queue * queue)
 	sti();
 }
 
+// 若队列缓冲区满则让进程进入可中断的睡眠状态
 static void sleep_if_full(struct tty_queue * queue)
 {
 	if (!FULL(*queue))
@@ -142,23 +148,30 @@ void wait_for_keypress(void)
 	sleep_if_empty(&tty_table[0].secondary);
 }
 
+// 复制成规范模式字符序列：回车换行大小写转化，正确处理键盘信号
 void copy_to_cooked(struct tty_struct * tty)
 {
 	signed char c;
 
 	while (!EMPTY(tty->read_q) && !FULL(tty->secondary)) {
 		GETCH(tty->read_q,c);
+		//回车转换行
 		if (c==13)
 			if (I_CRNL(tty))
 				c=10;
 			else if (I_NOCR(tty))
 				continue;
 			else ;
+		//换行转回车	
 		else if (c==10 && I_NLCR(tty))
 			c=13;
+
+		//转小写	
 		if (I_UCLC(tty))
 			c=tolower(c);
+			
 		if (L_CANON(tty)) {
+			// ctrl+c
 			if (c==KILL_CHAR(tty)) {
 				/* deal with killing the input line */
 				while(!(EMPTY(tty->secondary) ||
@@ -174,6 +187,7 @@ void copy_to_cooked(struct tty_struct * tty)
 				}
 				continue;
 			}
+			//辅助队列不空或者最后是 换行/结束字符（EOF），往写队列加入擦除字符（127），辅助队列后退1B
 			if (c==ERASE_CHAR(tty)) {
 				if (EMPTY(tty->secondary) ||
 				   (c=LAST(tty->secondary))==10 ||
@@ -188,27 +202,34 @@ void copy_to_cooked(struct tty_struct * tty)
 				DEC(tty->secondary.head);
 				continue;
 			}
+			//停止字符
 			if (c==STOP_CHAR(tty)) {
 				tty->stopped=1;
 				continue;
 			}
+			//开始字符
 			if (c==START_CHAR(tty)) {
 				tty->stopped=0;
 				continue;
 			}
 		}
+		//为进程产生信号
 		if (L_ISIG(tty)) {
+			//键盘中断信号
 			if (c==INTR_CHAR(tty)) {
 				tty_intr(tty,INTMASK);
 				continue;
 			}
+			//键盘退出信号
 			if (c==QUIT_CHAR(tty)) {
 				tty_intr(tty,QUITMASK);
 				continue;
 			}
 		}
+		//换行符或文件结束符
 		if (c==10 || c==EOF_CHAR(tty))
 			tty->secondary.data++;
+		//本地模式标志集中回显标志 ECHO 置位，特殊字符也会显示	
 		if (L_ECHO(tty)) {
 			if (c==10) {
 				PUTCH(10,tty->write_q);
@@ -227,6 +248,8 @@ void copy_to_cooked(struct tty_struct * tty)
 	wake_up(&tty->secondary.proc_list);
 }
 
+ // 参数：channel - 子设备号；buf - 缓冲区指针；nr - 欲读字节数。 
+ // 返回已读字节数。     也可处理串口终端读
 int tty_read(unsigned channel, char * buf, int nr)
 {
 	struct tty_struct * tty;
@@ -234,9 +257,13 @@ int tty_read(unsigned channel, char * buf, int nr)
 	int minimum,time,flag=0;
 	long oldalarm;
 
+ // 本版本 linux 内核的终端只有 3 个子设备，分别是控制台(0)、串口终端 1(1)和串口终端 2(2)。 
+ // 所以任何大于 2 的子设备号都是非法的。写的字节数当然也不能小于 0 的。
 	if (channel>2 || nr<0) return -1;
 	tty = &tty_table[channel];
+	//// 首先取进程中的(报警)定时值(滴答数)。
 	oldalarm = current->alarm;
+	// 并设置读操作超时定时值 time 和需要最少读取的字符个数 minimum。
 	time = 10L*tty->termios.c_cc[VTIME];
 	minimum = tty->termios.c_cc[VMIN];
 	if (time && !minimum) {
@@ -259,7 +286,7 @@ int tty_read(unsigned channel, char * buf, int nr)
 			continue;
 		}
 		do {
-			GETCH(tty->secondary,c);
+			GETCH(tty->secondary,c);      //============key=========
 			if (c==EOF_CHAR(tty) || c==10)
 				tty->secondary.data--;
 			if (c==EOF_CHAR(tty) && L_CANON(tty))
@@ -284,7 +311,7 @@ int tty_read(unsigned channel, char * buf, int nr)
 	current->alarm = oldalarm;
 	if (current->signal && !(b-buf))
 		return -EINTR;
-	return (b-buf);
+	return (b-buf);                 // 返回已读取的字符数
 }
 
 int tty_write(unsigned channel, char * buf, int nr)
@@ -316,7 +343,7 @@ int tty_write(unsigned channel, char * buf, int nr)
 			}
 			b++; nr--;
 			cr_flag = 0;
-			PUTCH(c,tty->write_q);
+			PUTCH(c,tty->write_q);     //============key=========
 		}
 		tty->write(tty);
 		if (nr>0)
@@ -339,6 +366,7 @@ int tty_write(unsigned channel, char * buf, int nr)
  * anyway, which is good, as the task sleeping might be
  * totally innocent.
  */
+// 在串口读字符中断(rs_io.s, 109)和键盘中断(kerboard.S, 69)中调用。
 void do_tty_interrupt(int tty)
 {
 	copy_to_cooked(tty_table+tty);

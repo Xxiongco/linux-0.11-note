@@ -27,7 +27,7 @@ DRIVERS =kernel/blk_drv/blk_drv.a kernel/chr_drv/chr_drv.a
 MATH	=kernel/math/math.a
 LIBS	=lib/lib.a
 
-.c.s:
+.c.s:                                                            #rules for .c to .s
 	$(CC) $(CFLAGS) \
 	-nostdinc -Iinclude -S -o $*.s $<
 .s.o:
@@ -49,9 +49,9 @@ tools/build: tools/build.c
 	$(CC) $(CFLAGS) \
 	-o tools/build tools/build.c
 
-boot/head.o: boot/head.s
+boot/head.o: boot/head.s                                         #apply .s.o rule
 
-tools/system:	boot/head.o init/main.o \
+tools/system:	boot/head.o init/main.o \                        #generate system command
 		$(ARCHIVES) $(DRIVERS) $(MATH) $(LIBS)
 	$(LD) $(LDFLAGS) boot/head.o init/main.o \
 	$(ARCHIVES) \
@@ -106,8 +106,8 @@ backup: clean
 	(cd .. ; tar cf - linux | compress - > backup.Z)
 	sync
 
-dep:
-	sed '/\#\#\# Dependencies/q' < Makefile > tmp_make
+dep:                                                          #delete line after ### Dependencies, and generate tmp_make
+	sed '/\#\#\# Dependencies/q' < Makefile > tmp_make               
 	(for i in init/*.c;do echo -n "init/";$(CPP) -M $$i;done) >> tmp_make
 	cp tmp_make Makefile
 	(cd fs; make dep)

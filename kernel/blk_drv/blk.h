@@ -21,14 +21,14 @@
  * read/write completion.
  */
 struct request {
-	int dev;		/* -1 if no request */
+	int dev;		/* -1 if no request, -1 就表示空闲*/
 	int cmd;		/* READ or WRITE */
-	int errors;
-	unsigned long sector;
-	unsigned long nr_sectors;
-	char * buffer;
-	struct task_struct * waiting;
-	struct buffer_head * bh;
+	int errors;     //表示操作时产生的错误次数
+	unsigned long sector;      //表示起始扇区
+	unsigned long nr_sectors;   //扇区数
+	char * buffer;              //表示数据缓冲区，也就是读盘之后的数据放在内存中的什么位置
+	struct task_struct * waiting;    //
+	struct buffer_head * bh;         //buffer header
 	struct request * next;
 };
 
@@ -36,12 +36,15 @@ struct request {
  * This is used in the elevator algorithm: Note that
  * reads always go before writes. This is natural: reads
  * are much more time-critical than writes.
- */
+  
+  扫描算法（SCAN), 单向运行，到头翻转
+  */
 #define IN_ORDER(s1,s2) \
 ((s1)->cmd<(s2)->cmd || (s1)->cmd==(s2)->cmd && \
 ((s1)->dev < (s2)->dev || ((s1)->dev == (s2)->dev && \
 (s1)->sector < (s2)->sector)))
 
+// 块设备结构。
 struct blk_dev_struct {
 	void (*request_fn)(void);
 	struct request * current_request;
@@ -58,12 +61,12 @@ extern struct task_struct * wait_for_request;
  * supported are hard-disks and floppies.
  */
 
-#if (MAJOR_NR == 1)
+#if (MAJOR_NR == 1)    /* RAM 盘（内存虚拟盘）*/
 /* ram disk */
 #define DEVICE_NAME "ramdisk"
-#define DEVICE_REQUEST do_rd_request
-#define DEVICE_NR(device) ((device) & 7)
-#define DEVICE_ON(device) 
+#define DEVICE_REQUEST do_rd_request           // 设备请求函数 do_rd_request()
+#define DEVICE_NR(device) ((device) & 7)      // 设备号(0--7)
+#define DEVICE_ON(device)                    // 开启设备。虚拟盘无须开启和关闭。
 #define DEVICE_OFF(device)
 
 #elif (MAJOR_NR == 2)
@@ -75,13 +78,13 @@ extern struct task_struct * wait_for_request;
 #define DEVICE_ON(device) floppy_on(DEVICE_NR(device))
 #define DEVICE_OFF(device) floppy_off(DEVICE_NR(device))
 
-#elif (MAJOR_NR == 3)
+#elif (MAJOR_NR == 3)      // 硬盘主设备号是 3
 /* harddisk */
 #define DEVICE_NAME "harddisk"
-#define DEVICE_INTR do_hd
+#define DEVICE_INTR do_hd                         // 设备中断处理程序 do_hd()。
 #define DEVICE_REQUEST do_hd_request
-#define DEVICE_NR(device) (MINOR(device)/5)
-#define DEVICE_ON(device)
+#define DEVICE_NR(device) (MINOR(device)/5)      // 设备号（0--1）。每个硬盘可以有 4 个分区
+#define DEVICE_ON(device)                        // 硬盘一直在工作，无须开启和关闭
 #define DEVICE_OFF(device)
 
 #elif
@@ -102,8 +105,8 @@ extern inline void unlock_buffer(struct buffer_head * bh)
 {
 	if (!bh->b_lock)
 		printk(DEVICE_NAME ": free buffer being unlocked\n");
-	bh->b_lock=0;
-	wake_up(&bh->b_wait);
+	bh->b_lock=0;                 // 否则将该缓冲区解锁
+	wake_up(&bh->b_wait);         // 唤醒等待该缓冲区的进程
 }
 
 extern inline void end_request(int uptodate)
@@ -120,7 +123,7 @@ extern inline void end_request(int uptodate)
 	}
 	wake_up(&CURRENT->waiting);
 	wake_up(&wait_for_request);
-	CURRENT->dev = -1;
+	CURRENT->dev = -1;                 //no free???????????
 	CURRENT = CURRENT->next;
 }
 
@@ -134,6 +137,7 @@ repeat: \
 		if (!CURRENT->bh->b_lock) \
 			panic(DEVICE_NAME ": block not locked"); \
 	}
+// 如果在进行请求操作时缓冲区没锁定则死机
 
 #endif
 

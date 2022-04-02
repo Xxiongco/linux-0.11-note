@@ -78,7 +78,7 @@ struct tss_struct {
 struct task_struct {
 /* these are hardcoded - don't touch */
 	long state;	/* -1 unrunnable, 0 runnable, >0 stopped */
-	long counter;
+	long counter;    //counter 值的计算方式为 counter = counter /2 + priority,  优先执行counter最大的任务
 	long priority;
 	long signal;
 	struct sigaction sigaction[32];

@@ -28,7 +28,7 @@ begbss:
 .text
 
 entry start
-start:
+start:                          !========================= step 1: copy all bios info to 0x90000 ==============
 
 ! ok, the read went well so we get current cursor position and save it for
 ! posterity.
@@ -112,7 +112,7 @@ is_disk1:
 
 	mov	ax,#0x0000
 	cld			! 'direction'=0, movs moves forward
-do_move:
+do_move:                         !========================= step 2: move system to 0x00000 ==============
 	mov	es,ax		! destination segment
 	add	ax,#0x1000
 	cmp	ax,#0x9000
@@ -127,14 +127,14 @@ do_move:
 
 ! then we load the segment descriptors
 
-end_move:
+end_move:                      !========================= step 3: load idt and gdt ==============
 	mov	ax,#SETUPSEG	! right, forgot this at first. didn't work :-)
 	mov	ds,ax
 	lidt	idt_48		! load idt with 0,0
 	lgdt	gdt_48		! load gdt with whatever appropriate
 
 ! that was painless, now we enable A20
-
+                                !========================= step 4: open A20 ==============
 	call	empty_8042
 	mov	al,#0xD1		! command write
 	out	#0x64,al
@@ -150,7 +150,7 @@ end_move:
 ! rectify it afterwards. Thus the bios puts interrupts at 0x08-0x0f,
 ! which is used for the internal hardware interrupts as well. We just
 ! have to reprogram the 8259's, and it isn't fun.
-
+                                  !========================= step 5: reprogram int of 8259 ==============
 	mov	al,#0x11		! initialization sequence
 	out	#0x20,al		! send it to 8259A-1
 	.word	0x00eb,0x00eb		! jmp $+2, jmp $+2
@@ -203,14 +203,14 @@ empty_8042:
 	ret
 
 gdt:
-	.word	0,0,0,0		! dummy
+	.word	0,0,0,0		! dummy              ! 第 1 个描述符,不用
 
-	.word	0x07FF		! 8Mb - limit=2047 (2048*4096=8Mb)
+	.word	0x07FF		! 8Mb - limit=2047 (2048*4096=8Mb)        !第 2 个, for code
 	.word	0x0000		! base address=0
 	.word	0x9A00		! code read/exec
 	.word	0x00C0		! granularity=4096, 386
 
-	.word	0x07FF		! 8Mb - limit=2047 (2048*4096=8Mb)
+	.word	0x07FF		! 8Mb - limit=2047 (2048*4096=8Mb)         !第 3 个, for data
 	.word	0x0000		! base address=0
 	.word	0x9200		! data read/write
 	.word	0x00C0		! granularity=4096, 386

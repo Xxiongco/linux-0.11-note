@@ -30,20 +30,20 @@ struct task_struct * wait_for_request = NULL;
  *	next-request
  */
 struct blk_dev_struct blk_dev[NR_BLK_DEV] = {
-	{ NULL, NULL },		/* no_dev */
-	{ NULL, NULL },		/* dev mem */
-	{ NULL, NULL },		/* dev fd */
-	{ NULL, NULL },		/* dev hd */
-	{ NULL, NULL },		/* dev ttyx */
-	{ NULL, NULL },		/* dev tty */
-	{ NULL, NULL }		/* dev lp */
+	{ NULL, NULL },		/* no_dev */          // 0 - 无设备。
+	{ NULL, NULL },		/* dev mem */         // 1 - 内存
+	{ NULL, NULL },		/* dev fd */          // 2 - 软驱设备
+	{ NULL, NULL },		/* dev hd */          // 3 - 硬盘设备
+	{ NULL, NULL },		/* dev ttyx */        // 4 - ttyx 设备
+	{ NULL, NULL },		/* dev tty */         // 5 - tty 设备
+	{ NULL, NULL }		/* dev lp */          // 6 - lp 打印机设备
 };
 
 static inline void lock_buffer(struct buffer_head * bh)
 {
 	cli();
-	while (bh->b_lock)
-		sleep_on(&bh->b_wait);
+	while (bh->b_lock)              // 如果缓冲区已被锁定，则睡眠，直到缓冲区解锁
+		sleep_on(&bh->b_wait); 
 	bh->b_lock=1;
 	sti();
 }
@@ -61,7 +61,7 @@ static inline void unlock_buffer(struct buffer_head * bh)
  * It disables interrupts so that it can muck with the
  * request-lists in peace.
  */
-static void add_request(struct blk_dev_struct * dev, struct request * req)
+static void add_request(struct blk_dev_struct * dev, struct request * req)    /// 向链表中加入请求项
 {
 	struct request * tmp;
 
@@ -75,6 +75,7 @@ static void add_request(struct blk_dev_struct * dev, struct request * req)
 		(dev->request_fn)();
 		return;
 	}
+	// 如果目前该设备已经有请求项在等待，则首先利用电梯算法搜索最佳位置，然后将当前请求插入请求链表中
 	for ( ; tmp->next ; tmp=tmp->next)
 		if ((IN_ORDER(tmp,req) ||
 		    !IN_ORDER(tmp,tmp->next)) &&
@@ -85,6 +86,8 @@ static void add_request(struct blk_dev_struct * dev, struct request * req)
 	sti();
 }
 
+//// 创建请求项并插入请求队列。参数是：主设备号 major，命令 rw，存放数据的缓冲区头指针 bh。
+// 新的req从request[32] 全局request数组中分配一个空闲项
 static void make_request(int major,int rw, struct buffer_head * bh)
 {
 	struct request * req;
@@ -112,10 +115,13 @@ repeat:
  * we want some room for reads: they take precedence. The last third
  * of the requests are only for reads.
  */
+/* 我们不能让队列中全都是写请求项：我们需要为读请求保留一些空间：读操作 
+ * 是优先的。请求队列的后三分之一空间是为读准备的。 
+ */
 	if (rw == READ)
-		req = request+NR_REQUEST;
+		req = request+NR_REQUEST;          // 对于读请求，将队列指针指向队列尾部
 	else
-		req = request+((NR_REQUEST*2)/3);
+		req = request+((NR_REQUEST*2)/3);    // 对于写请求，队列指针指向队列 2/3 处
 /* find an empty request */
 	while (--req >= request)
 		if (req->dev<0)
@@ -142,6 +148,9 @@ repeat:
 	add_request(major+blk_dev,req);
 }
 
+// 低层读写数据块函数
+// 该函数主要是在 fs/buffer.c 中被调用。实际的读写操作是由设备的 request_fn()函数完成。 
+// 对于硬盘操作，该函数是 do_hd_request()
 void ll_rw_block(int rw, struct buffer_head * bh)
 {
 	unsigned int major;

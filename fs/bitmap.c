@@ -10,24 +10,31 @@
 #include <linux/sched.h>
 #include <linux/kernel.h>
 
+//// 将指定地址(addr)处的一块内存清零。嵌入汇编程序宏。 256B
+// 输入：eax = 0，ecx = 数据块大小 BLOCK_SIZE/4，edi = addr。
 #define clear_block(addr) \
 __asm__("cld\n\t" \
 	"rep\n\t" \
 	"stosl" \
 	::"a" (0),"c" (BLOCK_SIZE/4),"D" ((long) (addr)):"cx","di")
 
+//// 置位指定地址开始的第 nr 个位偏移处的比特位(nr 可以大于 32！)。返回原比特位（0 或 1）。 
+// 输入：%0 - eax（返回值)，%1 - eax(0)；%2 - nr，位偏移值；%3 - (addr)，addr 的内容。
 #define set_bit(nr,addr) ({\
 register int res __asm__("ax"); \
 __asm__ __volatile__("btsl %2,%3\n\tsetb %%al": \
 "=a" (res):"0" (0),"r" (nr),"m" (*(addr))); \
 res;})
 
+//// 复位指定地址开始的第 nr 位偏移处的比特位。返回原比特位的反码（1 或 0）。 
+// 输入：%0 - eax（返回值)，%1 - eax(0)；%2 - nr，位偏移值；%3 - (addr)，addr 的内容。
 #define clear_bit(nr,addr) ({\
 register int res __asm__("ax"); \
 __asm__ __volatile__("btrl %2,%3\n\tsetnb %%al": \
 "=a" (res):"0" (0),"r" (nr),"m" (*(addr))); \
 res;})
 
+//// 从 addr 开始寻找第 1 个 0 值比特位。
 #define find_first_zero(addr) ({ \
 int __res; \
 __asm__("cld\n" \
@@ -44,12 +51,15 @@ __asm__("cld\n" \
 	:"=c" (__res):"c" (0),"S" (addr):"ax","dx","si"); \
 __res;})
 
+
+ //// 释放设备 dev 上数据区中的逻辑块 block。 
+ // 复位指定逻辑块 block 的逻辑块位图比特位。
 void free_block(int dev, int block)
 {
 	struct super_block * sb;
 	struct buffer_head * bh;
 
-	if (!(sb = get_super(dev)))
+	if (!(sb = get_super(dev)))       //get super block
 		panic("trying to free block on nonexistent device");
 	if (block < sb->s_firstdatazone || block >= sb->s_nzones)
 		panic("trying to free block not in datazone");
@@ -69,9 +79,12 @@ void free_block(int dev, int block)
 		printk("block (%04x:%d) ",dev,block+sb->s_firstdatazone-1);
 		panic("free_block: bit already cleared");
 	}
+	// 置相应逻辑块位图所在缓冲区已修改标志。
 	sb->s_zmap[block/8192]->b_dirt = 1;
 }
 
+ ////向设备 dev 申请一个逻辑块（磁盘块，区段）。返回逻辑块号。 
+ // 置位指定逻辑块 block 的逻辑块位图比特位。
 int new_block(int dev)
 {
 	struct buffer_head * bh;
@@ -93,7 +106,7 @@ int new_block(int dev)
 	j += i*8192 + sb->s_firstdatazone-1;
 	if (j >= sb->s_nzones)
 		return 0;
-	if (!(bh=getblk(dev,j)))
+	if (!(bh=getblk(dev,j)))         //==============key============
 		panic("new_block: cannot get block");
 	if (bh->b_count != 1)
 		panic("new block: count is != 1");
@@ -104,6 +117,8 @@ int new_block(int dev)
 	return j;
 }
 
+ //// 释放指定的 i 节点。 
+ // 复位对应 i 节点位图比特位
 void free_inode(struct m_inode * inode)
 {
 	struct super_block * sb;
@@ -133,6 +148,8 @@ void free_inode(struct m_inode * inode)
 	memset(inode,0,sizeof(*inode));
 }
 
+ //// 为设备 dev 建立一个新 i 节点。返回该新 i 节点的指针。 
+ // 在内存 i 节点表中获取一个空闲 i 节点表项，并从 i 节点位图中找一个空闲 i 节点。
 struct m_inode * new_inode(int dev)
 {
 	struct m_inode * inode;
@@ -140,7 +157,7 @@ struct m_inode * new_inode(int dev)
 	struct buffer_head * bh;
 	int i,j;
 
-	if (!(inode=get_empty_inode()))
+	if (!(inode=get_empty_inode()))         //=======key=========
 		return NULL;
 	if (!(sb = get_super(dev)))
 		panic("new_inode with unknown device");

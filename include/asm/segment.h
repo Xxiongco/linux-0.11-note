@@ -22,6 +22,8 @@ extern inline unsigned long get_fs_long(const unsigned long *addr)
 	return _v;
 }
 
+//功能：向用户空间中addr地址处写一个字节的内容
+// 参数：val ：要写入的数据； addr ：用户空间中的逻辑地址
 extern inline void put_fs_byte(char val,char *addr)
 {
 __asm__ ("movb %0,%%fs:%1"::"r" (val),"m" (*addr));

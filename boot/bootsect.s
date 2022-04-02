@@ -1,12 +1,12 @@
 !
 ! SYS_SIZE is the number of clicks (16 bytes) to be loaded.
 ! 0x3000 is 0x30000 bytes = 196kB, more than enough for current
-! versions of linux
+! versions of linuxd
 !
 SYSSIZE = 0x3000
 !
 !	bootsect.s		(C) 1991 Linus Torvalds
-!
+!                           ! ======================== step 1 ======================= 
 ! bootsect.s is loaded at 0x7c00 by the bios-startup routines, and moves
 ! iself out of the way to address 0x90000, and jumps there.
 !
@@ -51,13 +51,13 @@ start:
 	mov	cx,#256
 	sub	si,si
 	sub	di,di
-	rep
-	movw
-	jmpi	go,INITSEG
+	rep                      ! ======================== step 2 ======================= 
+	movw                     ! and increase si,di
+	jmpi	go,INITSEG       ! jump to INITSEG, and start go, now cs = 0x9000
 go:	mov	ax,cs
 	mov	ds,ax
 	mov	es,ax
-! put stack at 0x9ff00.
+! put stack at 0x9ff00.      ! 将堆栈指针 sp 指向 0x9ff00(即 0x9000:0xff00)处
 	mov	ss,ax
 	mov	sp,#0xFF00		! arbitrary value >>512
 
@@ -69,7 +69,7 @@ load_setup:
 	mov	cx,#0x0002		! sector 2, track 0
 	mov	bx,#0x0200		! address = 512, in INITSEG
 	mov	ax,#0x0200+SETUPLEN	! service 2, nr of sectors
-	int	0x13			! read it
+	int	0x13			! read it      ! ======================== step 3 =======================    
 	jnc	ok_load_setup		! ok - continue
 	mov	dx,#0x0000
 	mov	ax,#0x0000		! reset the diskette
@@ -106,7 +106,7 @@ ok_load_setup:
 
 	mov	ax,#SYSSEG
 	mov	es,ax		! segment of 0x010000
-	call	read_it
+	call	read_it        ! ======================== step 4 ======================= 
 	call	kill_motor
 
 ! After that we check which root-device to use. If the device is

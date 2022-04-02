@@ -21,12 +21,15 @@ extern void write_verify(unsigned long address);
 
 long last_pid=0;
 
+// 根据当前任务的ldt 按页 设置内存区域，实现方法为write_verify
+// addr： 起始位置
+// size: 偏移量
 void verify_area(void * addr,int size)
 {
-	unsigned long start;
+	unsigned long start;      //4B
 
 	start = (unsigned long) addr;
-	size += start & 0xfff;
+	size += start & 0xfff;           //0xfff = 4095
 	start &= 0xfffff000;
 	start += get_base(current->ldt[2]);
 	while (size>0) {
@@ -36,6 +39,8 @@ void verify_area(void * addr,int size)
 	}
 }
 
+ // 设置新任务的代码和数据段基址、限长并复制页表。 
+ // nr 为新任务号；p 是新任务数据结构的指针
 int copy_mem(int nr,struct task_struct * p)
 {
 	unsigned long old_data_base,new_data_base,data_limit;
@@ -49,10 +54,10 @@ int copy_mem(int nr,struct task_struct * p)
 		panic("We don't support separate I&D");
 	if (data_limit < code_limit)
 		panic("Bad data_limit");
-	new_data_base = new_code_base = nr * 0x4000000;
+	new_data_base = new_code_base = nr * 0x4000000;   // 新基址=任务号*64Mb(任务大小)
 	p->start_code = new_code_base;
-	set_base(p->ldt[1],new_code_base);
-	set_base(p->ldt[2],new_data_base);
+	set_base(p->ldt[1],new_code_base);    // 设置代码段描述符中基址域
+	set_base(p->ldt[2],new_data_base);    // 设置数据段描述符中基址域
 	if (copy_page_tables(old_data_base,new_data_base,data_limit)) {
 		free_page_tables(new_data_base,data_limit);
 		return -ENOMEM;
@@ -65,6 +70,11 @@ int copy_mem(int nr,struct task_struct * p)
  * information (task[nr]) and sets up the necessary registers. It
  * also copies the data segment in it's entirety.
  */
+/* 
+ * OK，下面是主要的 fork 子程序。它复制系统进程信息(task[n])并且设置必要的寄存器。 
+ * 它还整个地复制数据段。 
+ */ 
+ // 复制进程。
 int copy_process(int nr,long ebp,long edi,long esi,long gs,long none,
 		long ebx,long ecx,long edx,
 		long fs,long es,long ds,
@@ -77,8 +87,8 @@ int copy_process(int nr,long ebp,long edi,long esi,long gs,long none,
 	p = (struct task_struct *) get_free_page();
 	if (!p)
 		return -EAGAIN;
-	task[nr] = p;
-	*p = *current;	/* NOTE! this doesn't copy the supervisor stack */
+	task[nr] = p; 
+	*p = *current;	/* NOTE! this doesn't copy the supervisor stack */     //完全复制之前的进程的 task_struct   
 	p->state = TASK_UNINTERRUPTIBLE;
 	p->pid = last_pid;
 	p->father = current->pid;
@@ -132,7 +142,8 @@ int copy_process(int nr,long ebp,long edi,long esi,long gs,long none,
 	return last_pid;
 }
 
-int find_empty_process(void)
+// 为新进程取得不重复的进程号 last_pid，并返回在任务数组中的任务号(数组 index)  一直寻找，无退路
+int find_empty_process(void) 
 {
 	int i;
 

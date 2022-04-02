@@ -1,5 +1,6 @@
 #ifndef _TERMIOS_H
 #define _TERMIOS_H
+//terminal io
 
 #define TTY_BUF_SIZE 1024
 
@@ -33,6 +34,7 @@
 #define TIOCSSOFTCAR	0x541A
 #define TIOCINQ		0x541B
 
+// 窗口大小(Window size)属性结构
 struct winsize {
 	unsigned short ws_row;
 	unsigned short ws_col;

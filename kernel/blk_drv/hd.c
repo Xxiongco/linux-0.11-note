@@ -34,14 +34,15 @@ inb_p(0x71); \
 #define MAX_ERRORS	7
 #define MAX_HD		2
 
-static void recal_intr(void);
+static void recal_intr(void);        // 硬盘中断程序在复位操作时会调用的重新校正函数(287 行)
 
-static int recalibrate = 1;
-static int reset = 1;
+static int recalibrate = 1;          // 重新校正
+static int reset = 1;                // 复位
 
 /*
  *  This struct defines the HD's and their types.
  */
+// 各字段分别是磁头数、每磁道扇区数、柱面数、写前预补偿柱面号、磁头着陆区柱面号、控制字节。
 struct hd_i_struct {
 	int head,sect,cyl,wpcom,lzone,ctl;
 	};
@@ -53,14 +54,18 @@ struct hd_i_struct hd_info[] = { {0,0,0,0,0,0},{0,0,0,0,0,0} };
 static int NR_HD = 0;
 #endif
 
+ // 定义硬盘分区结构。给出每个分区的物理起始扇区号、分区扇区总数。 
+ // 其中 5 的倍数处的项（例如 hd[0]和 hd[5]等）代表整个硬盘中的参数。
 static struct hd_struct {
 	long start_sect;
 	long nr_sects;
 } hd[5*MAX_HD]={{0,0},};
 
+// 读端口 port，共读 nr 字，保存在 buf 中。
 #define port_read(port,buf,nr) \
 __asm__("cld;rep;insw"::"d" (port),"D" (buf),"c" (nr):"cx","di")
 
+// 写端口 port，共写 nr 字，从 buf 中取数据。
 #define port_write(port,buf,nr) \
 __asm__("cld;rep;outsw"::"d" (port),"S" (buf),"c" (nr):"cx","si")
 
@@ -68,17 +73,20 @@ extern void hd_interrupt(void);
 extern void rd_load(void);
 
 /* This may be used only once, enforced by 'static int callable' */
+//取得BIOS信息，硬盘信息，加载主存，安装根文件系统
 int sys_setup(void * BIOS)
 {
-	static int callable = 1;
+	static int callable = 1;              //第二次调用本函数时本行不生效!!!!
 	int i,drive;
 	unsigned char cmos_disks;
 	struct partition *p;
 	struct buffer_head * bh;
 
+// 初始化时 callable=1，当运行该函数时将其设置为 0，使本函数只能执行一次
 	if (!callable)
 		return -1;
 	callable = 0;
+// 如果没有在 config.h 中定义硬盘参数，就从 0x90080 处读入
 #ifndef HD_TYPE
 	for (drive=0 ; drive<2 ; drive++) {
 		hd_info[drive].cyl = *(unsigned short *) BIOS;
@@ -94,6 +102,7 @@ int sys_setup(void * BIOS)
 	else
 		NR_HD=1;
 #endif
+// 设置每个硬盘的起始扇区号和扇区总数
 	for (i=0 ; i<NR_HD ; i++) {
 		hd[i*5].start_sect = 0;
 		hd[i*5].nr_sects = hd_info[i].head*
@@ -133,6 +142,9 @@ int sys_setup(void * BIOS)
 		hd[i*5].start_sect = 0;
 		hd[i*5].nr_sects = 0;
 	}
+	// 读取每一个硬盘上第 1 块数据（第 1 个扇区有用），获取其中的分区表信息
+	// 然后根据硬盘头 1 个扇区位置 0x1fe 处的两个字节是否为'55AA'来判断 
+ // 该扇区中位于 0x1BE 开始的分区表是否有效
 	for (drive=0 ; drive<NR_HD ; drive++) {
 		if (!(bh = bread(0x300 + drive*5,0))) {
 			printk("Unable to read partition table of drive %d\n\r",
@@ -153,30 +165,33 @@ int sys_setup(void * BIOS)
 	}
 	if (NR_HD)
 		printk("Partition table%s ok.\n\r",(NR_HD>1)?"s":"");
-	rd_load();
-	mount_root();
+	rd_load();            // 加载（创建）RAMDISK(kernel/blk_drv/ramdisk.c,71)
+	mount_root();         // 安装根文件系统(fs/super.c,242)
 	return (0);
 }
 
+// 读硬盘控制器状态寄存器端口 HD_STATUS(0x1f7)，并循环检测驱动器就绪比特位和控制器忙位
 static int controller_ready(void)
 {
 	int retries=10000;
 
 	while (--retries && (inb_p(HD_STATUS)&0xc0)!=0x40);
-	return (retries);
+	return (retries);   // 返回等待循环的次数
 }
 
+///检测硬盘执行命令后的状态。(win_表示温切斯特硬盘的缩写)
 static int win_result(void)
 {
-	int i=inb_p(HD_STATUS);
+	int i=inb_p(HD_STATUS);   //status is in some register
 
 	if ((i & (BUSY_STAT | READY_STAT | WRERR_STAT | SEEK_STAT | ERR_STAT))
 		== (READY_STAT | SEEK_STAT))
 		return(0); /* ok */
-	if (i&1) i=inb(HD_ERROR);
+	if (i&1) i=inb(HD_ERROR);    // 若 ERR_STAT 置位，则读取错误寄存器
 	return (1);
 }
 
+//// 向硬盘控制器发送命令块  写端口
 static void hd_out(unsigned int drive,unsigned int nsect,unsigned int sect,
 		unsigned int head,unsigned int cyl,unsigned int cmd,
 		void (*intr_addr)(void))
@@ -199,6 +214,7 @@ static void hd_out(unsigned int drive,unsigned int nsect,unsigned int sect,
 	outb(cmd,++port);
 }
 
+// 等待硬盘就绪。
 static int drive_busy(void)
 {
 	unsigned int i;
@@ -214,19 +230,21 @@ static int drive_busy(void)
 	return(1);
 }
 
+// 诊断复位（重新校正）硬盘控制器
 static void reset_controller(void)
 {
 	int	i;
 
-	outb(4,HD_CMD);
-	for(i = 0; i < 100; i++) nop();
-	outb(hd_info[0].ctl & 0x0f ,HD_CMD);
+	outb(4,HD_CMD);               // 向控制寄存器端口发送控制字节(4-复位)。
+	for(i = 0; i < 100; i++) nop();    // 等待一段时间（循环空操作）
+	outb(hd_info[0].ctl & 0x0f ,HD_CMD);       // 再发送正常的控制字节(不禁止重试、重读)
 	if (drive_busy())
 		printk("HD-controller still busy\n\r");
 	if ((i = inb(HD_ERROR)) != 1)
 		printk("HD-controller reset failed: %02x\n\r",i);
 }
 
+// 复位硬盘 nr。
 static void reset_hd(int nr)
 {
 	reset_controller();
@@ -239,6 +257,7 @@ void unexpected_hd_interrupt(void)
 	printk("Unexpected HD interrupt\n\r");
 }
 
+// 读写硬盘失败处理调用函数
 static void bad_rw_intr(void)
 {
 	if (++CURRENT->errors >= MAX_ERRORS)
@@ -247,6 +266,7 @@ static void bad_rw_intr(void)
 		reset = 1;
 }
 
+// 读操作中断调用函数
 static void read_intr(void)
 {
 	if (win_result()) {
@@ -262,10 +282,11 @@ static void read_intr(void)
 		do_hd = &read_intr;
 		return;
 	}
-	end_request(1);
+	end_request(1);    // 若全部扇区数据已经读完，则处理请求结束事宜
 	do_hd_request();
 }
 
+// 写扇区中断调用函数。
 static void write_intr(void)
 {
 	if (win_result()) {
@@ -284,6 +305,7 @@ static void write_intr(void)
 	do_hd_request();
 }
 
+// 硬盘重新校正（复位）中断调用函数
 static void recal_intr(void)
 {
 	if (win_result())
@@ -291,6 +313,7 @@ static void recal_intr(void)
 	do_hd_request();
 }
 
+// 执行硬盘读写请求操作
 void do_hd_request(void)
 {
 	int i,r;
@@ -303,22 +326,26 @@ void do_hd_request(void)
 	block = CURRENT->sector;
 	if (dev >= 5*NR_HD || block+2 > hd[dev].nr_sects) {
 		end_request(0);
-		goto repeat;
+		goto repeat;                 //并跳转到标号 repeat 处, （定义在 INIT_REQUEST 开始处）
 	}
 	block += hd[dev].start_sect;
 	dev /= 5;
+ // 下面嵌入汇编代码用来从硬盘信息结构中根据起始扇区号和每磁道扇区数计算在磁道中的 
+ // 扇区号(sec)、所在柱面号(cyl)和磁头号(head)
 	__asm__("divl %4":"=a" (block),"=d" (sec):"0" (block),"1" (0),
 		"r" (hd_info[dev].sect));
 	__asm__("divl %4":"=a" (cyl),"=d" (head):"0" (block),"1" (0),
 		"r" (hd_info[dev].head));
 	sec++;
 	nsect = CURRENT->nr_sectors;
+	// 如果 reset 置 1，则执行复位操作。复位硬盘和控制器，并置需要重新校正标志，返回
 	if (reset) {
 		reset = 0;
 		recalibrate = 1;
 		reset_hd(CURRENT_DEV);
 		return;
 	}
+	// 如果重新校正标志(recalibrate)置位，则首先复位该标志，然后向硬盘控制器发送重新校正命令
 	if (recalibrate) {
 		recalibrate = 0;
 		hd_out(dev,hd_info[CURRENT_DEV].sect,0,0,0,
@@ -343,7 +370,7 @@ void do_hd_request(void)
 void hd_init(void)
 {
 	blk_dev[MAJOR_NR].request_fn = DEVICE_REQUEST;
-	set_intr_gate(0x2E,&hd_interrupt);
-	outb_p(inb_p(0x21)&0xfb,0x21);
+	set_intr_gate(0x2E,&hd_interrupt);          //set interrupt
+	outb_p(inb_p(0x21)&0xfb,0x21);      //往几个 IO 端口上读写，其作用是允许硬盘控制器发送中断请求信号
 	outb(inb_p(0xA1)&0xbf,0xA1);
 }

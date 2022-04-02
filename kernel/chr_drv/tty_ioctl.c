@@ -15,6 +15,7 @@
 #include <asm/segment.h>
 #include <asm/system.h>
 
+// 这是波特率因子数组（或称为除数数组）
 static unsigned short quotient[] = {
 	0, 2304, 1536, 1047, 857,
 	768, 576, 384, 192, 96,
@@ -36,6 +37,7 @@ static void change_speed(struct tty_struct * tty)
 	sti();
 }
 
+// 令缓冲队列的头指针等于尾指针，从而达到清空缓冲区(零字符)的目的
 static void flush(struct tty_queue * queue)
 {
 	cli();
@@ -59,6 +61,7 @@ static int get_termios(struct tty_struct * tty, struct termios * termios)
 
 	verify_area(termios, sizeof (*termios));
 	for (i=0 ; i< (sizeof (*termios)) ; i++)
+	// 复制指定 tty 结构中的 termios 结构信息到用户 termios 结构缓冲区
 		put_fs_byte( ((char *)&tty->termios)[i] , i+(char *)termios );
 	return 0;
 }
@@ -69,6 +72,7 @@ static int set_termios(struct tty_struct * tty, struct termios * termios)
 
 	for (i=0 ; i< (sizeof (*termios)) ; i++)
 		((char *)&tty->termios)[i]=get_fs_byte(i+(char *)termios);
+	// 用户有可能已修改了 tty 的串行口传输波特率，所以根据 termios 结构中的控制模式标志 c_cflag
 	change_speed(tty);
 	return 0;
 }
@@ -112,6 +116,8 @@ static int set_termio(struct tty_struct * tty, struct termio * termio)
 	return 0;
 }
 
+//// tty 终端设备的 ioctl 函数。 
+ // 参数：dev - 设备号；cmd - ioctl 命令；arg - 操作参数指针。
 int tty_ioctl(int dev, int cmd, int arg)
 {
 	struct tty_struct * tty;
@@ -128,6 +134,7 @@ int tty_ioctl(int dev, int cmd, int arg)
 		case TCSETSF:
 			flush(&tty->read_q); /* fallthrough */
 		case TCSETSW:
+		// 在设置终端 termios 的信息之前，需要先等待输出队列中所有数据处理完(耗尽)。
 			wait_until_sent(tty); /* fallthrough */
 		case TCSETS:
 			return set_termios(tty,(struct termios *) arg);

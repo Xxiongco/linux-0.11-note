@@ -17,6 +17,7 @@ int sys_sgetmask()
 	return current->blocked;
 }
 
+// 设置新的信号屏蔽位图。SIGKILL 不能被屏蔽。返回值是原信号屏蔽位图
 int sys_ssetmask(int newmask)
 {
 	int old=current->blocked;
@@ -25,18 +26,20 @@ int sys_ssetmask(int newmask)
 	return old;
 }
 
+// 复制 sigaction 数据到 fs 数据段 to 处
 static inline void save_old(char * from,char * to)
 {
 	int i;
 
-	verify_area(to, sizeof(struct sigaction));
+	verify_area(to, sizeof(struct sigaction));         // 验证 to 处的内存是否足够
 	for (i=0 ; i< sizeof(struct sigaction) ; i++) {
-		put_fs_byte(*from,to);
+		put_fs_byte(*from,to);         // 复制到 fs 段。一般是用户数据段
 		from++;
 		to++;
 	}
 }
 
+// 把 sigaction 数据从 fs 数据段复制到 to 处
 static inline void get_new(char * from,char * to)
 {
 	int i;
@@ -45,6 +48,10 @@ static inline void get_new(char * from,char * to)
 		*(to++) = get_fs_byte(from++);
 }
 
+// signal()系统调用。类似于 sigaction()。为指定的信号安装新的信号句柄(信号处理程序)。 
+ // 信号句柄可以是用户指定的函数，也可以是 SIG_DFL（默认句柄）或 SIG_IGN（忽略）。 
+ // 参数 signum --指定的信号；handler -- 指定的句柄；restorer -- [??] 
+ // 函数返回原信号句柄。
 int sys_signal(int signum, long handler, long restorer)
 {
 	struct sigaction tmp;
@@ -79,6 +86,9 @@ int sys_sigaction(int signum, const struct sigaction * action,
 	return 0;
 }
 
+ // 系统调用中断处理程序中真正的信号处理程序（在 kernel/system_call.s,119 行）。 
+ // 该段代码的主要作用是将信号的处理句柄插入到用户程序堆栈中，并在本系统调用结束 
+ // 返回后立刻执行信号句柄程序，然后继续执行用户的程序。
 void do_signal(long signr,long eax, long ebx, long ecx, long edx,
 	long fs, long es, long ds,
 	long eip, long cs, long eflags,

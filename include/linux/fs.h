@@ -15,9 +15,9 @@
  * 1 - /dev/mem
  * 2 - /dev/fd
  * 3 - /dev/hd
- * 4 - /dev/ttyx
- * 5 - /dev/tty
- * 6 - /dev/lp
+ * 4 - /dev/ttyx      tty 串行终端设备
+ * 5 - /dev/tty       tty 终端设备
+ * 6 - /dev/lp        打印设备
  * 7 - unnamed pipes
  */
 
@@ -71,7 +71,7 @@ struct buffer_head {
 	unsigned short b_dev;		/* device (0 = free) */
 	unsigned char b_uptodate;
 	unsigned char b_dirt;		/* 0-clean,1-dirty */
-	unsigned char b_count;		/* users using this block */
+	unsigned char b_count;		/* users using this block */  //使用的用户数, reference count? 
 	unsigned char b_lock;		/* 0 - ok, 1 -locked */
 	struct task_struct * b_wait;
 	struct buffer_head * b_prev;
@@ -80,16 +80,18 @@ struct buffer_head {
 	struct buffer_head * b_next_free;
 };
 
+// 磁盘上的索引节点(i 节点)数据结构
 struct d_inode {
-	unsigned short i_mode;
-	unsigned short i_uid;
+	unsigned short i_mode;   // 文件类型和属性(rwx 位)
+	unsigned short i_uid;    // 用户 id（文件拥有者标识符）
 	unsigned long i_size;
 	unsigned long i_time;
-	unsigned char i_gid;
-	unsigned char i_nlinks;
-	unsigned short i_zone[9];
+	unsigned char i_gid; 
+	unsigned char i_nlinks;     // 链接数（多少个文件目录项指向该 i 节点）
+	unsigned short i_zone[9];   // 直接(0-6)、间接(7)或双重间接(8)逻辑块号。 zone 是区的意思，可译成区段，或逻辑块
 };
 
+// 这是在内存中的 i 节点结构。前 7 项与 d_inode 完全一样
 struct m_inode {
 	unsigned short i_mode;
 	unsigned short i_uid;
@@ -99,10 +101,10 @@ struct m_inode {
 	unsigned char i_nlinks;
 	unsigned short i_zone[9];
 /* these are in memory also */
-	struct task_struct * i_wait;
+	struct task_struct * i_wait;    // 等待该 i 节点的进程
 	unsigned long i_atime;
 	unsigned long i_ctime;
-	unsigned short i_dev;
+	unsigned short i_dev;          //存储该文件所在的设备，dev_t中包括主设备号和次设备号
 	unsigned short i_num;
 	unsigned short i_count;
 	unsigned char i_lock;
@@ -118,17 +120,18 @@ struct file {
 	unsigned short f_flags;
 	unsigned short f_count;
 	struct m_inode * f_inode;
-	off_t f_pos;
+	off_t f_pos;                // 文件位置（读写偏移值）
 };
 
+// 内存中磁盘超级块结构
 struct super_block {
-	unsigned short s_ninodes;
-	unsigned short s_nzones;
-	unsigned short s_imap_blocks;
-	unsigned short s_zmap_blocks;
-	unsigned short s_firstdatazone;
-	unsigned short s_log_zone_size;
-	unsigned long s_max_size;
+	unsigned short s_ninodes;        // 节点数
+	unsigned short s_nzones;         // 逻辑块数
+	unsigned short s_imap_blocks;    // i 节点位图所占用的数据块数
+	unsigned short s_zmap_blocks;    // 逻辑块位图所占用的数据块数
+	unsigned short s_firstdatazone;  // 第一个数据逻辑块号
+	unsigned short s_log_zone_size;  // log(数据块数/逻辑块)
+	unsigned long s_max_size;        // 文件最大长度
 	unsigned short s_magic;
 /* These are only in memory */
 	struct buffer_head * s_imap[8];
@@ -143,6 +146,7 @@ struct super_block {
 	unsigned char s_dirt;
 };
 
+// 磁盘上超级块结构
 struct d_super_block {
 	unsigned short s_ninodes;
 	unsigned short s_nzones;
@@ -170,24 +174,33 @@ extern int floppy_change(unsigned int nr);
 extern int ticks_to_floppy_on(unsigned int dev);
 extern void floppy_on(unsigned int dev);
 extern void floppy_off(unsigned int dev);
+//// 以下是文件系统操作管理用的函数原型。 
+ // 将 i 节点指定的文件截为 0。
 extern void truncate(struct m_inode * inode);
+// 刷新 i 节点信息
 extern void sync_inodes(void);
 extern void wait_on(struct m_inode * inode);
+// 逻辑块(区段，磁盘块)位图操作。取数据块 block 在设备上对应的逻辑块号    
 extern int bmap(struct m_inode * inode,int block);
 extern int create_block(struct m_inode * inode,int block);
 extern struct m_inode * namei(const char * pathname);
 extern int open_namei(const char * pathname, int flag, int mode,
 	struct m_inode ** res_inode);
+// 释放一个 i 节点(回写入设备)。
 extern void iput(struct m_inode * inode);
+// 从设备读取指定节点号的一个 i 节点。
 extern struct m_inode * iget(int dev,int nr);
 extern struct m_inode * get_empty_inode(void);
 extern struct m_inode * get_pipe_inode(void);
 extern struct buffer_head * get_hash_table(int dev, int block);
 extern struct buffer_head * getblk(int dev, int block);
+// 读/写数据块
 extern void ll_rw_block(int rw, struct buffer_head * bh);
 extern void brelse(struct buffer_head * buf);
 extern struct buffer_head * bread(int dev,int block);
+// 读 4 块缓冲区到指定地址的内存中
 extern void bread_page(unsigned long addr,int dev,int b[4]);
+// 读取头一个指定的数据块，并标记后续将要读的块
 extern struct buffer_head * breada(int dev,int block,...);
 extern int new_block(int dev);
 extern void free_block(int dev, int block);

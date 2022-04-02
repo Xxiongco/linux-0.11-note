@@ -21,7 +21,7 @@ startup_32:
 	mov %ax,%fs
 	mov %ax,%gs
 	lss _stack_start,%esp
-	call setup_idt
+	call setup_idt                         ! ================== step 1, set idt, gdt ====================
 	call setup_gdt
 	movl $0x10,%eax		# reload all the segment registers
 	mov %ax,%ds		# after changing gdt. CS was already
@@ -30,7 +30,7 @@ startup_32:
 	mov %ax,%gs
 	lss _stack_start,%esp
 	xorl %eax,%eax
-1:	incl %eax		# check that A20 really IS enabled
+1:	incl %eax		# check that A20 really IS enabled     ! ================== step 2, check A20 and math chip ====================
 	movl %eax,0x000000	# loop forever if it isn't
 	cmpl %eax,0x100000
 	je 1b
@@ -46,7 +46,7 @@ startup_32:
 	orl $2,%eax		# set MP
 	movl %eax,%cr0
 	call check_x87
-	jmp after_page_tables
+	jmp after_page_tables                    ! ================== step 3, set page tables ====================
 
 /*
  * We depend on ET to be correct. This checks for 287/387.

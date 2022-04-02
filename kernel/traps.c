@@ -19,18 +19,23 @@
 #include <asm/segment.h>
 #include <asm/io.h>
 
+//  以下语句定义了三个嵌入式汇编宏语句函数
+
+// 取段 seg 中地址 addr 处的一个字节
 #define get_seg_byte(seg,addr) ({ \
 register char __res; \
 __asm__("push %%fs;mov %%ax,%%fs;movb %%fs:%2,%%al;pop %%fs" \
 	:"=a" (__res):"0" (seg),"m" (*(addr))); \
 __res;})
 
+// 取段 seg 中地址 addr 处的一个长字（4 字节）
 #define get_seg_long(seg,addr) ({ \
 register unsigned long __res; \
 __asm__("push %%fs;mov %%ax,%%fs;movl %%fs:%2,%%eax;pop %%fs" \
 	:"=a" (__res):"0" (seg),"m" (*(addr))); \
 __res;})
 
+// 取 fs 段寄存器的值
 #define _fs() ({ \
 register unsigned short __res; \
 __asm__("mov %%fs,%%ax":"=a" (__res):); \
@@ -60,6 +65,16 @@ void reserved(void);
 void parallel_interrupt(void);
 void irq13(void);
 
+// 该子程序用来打印出错中断的名称、出错号、调用程序的 EIP、EFLAGS、ESP、fs 段寄存器值、 
+ // 段的基址、段的长度、进程号 pid、任务号、10 字节指令码。如果堆栈在用户数据段，则还 
+ // 打印 16 字节的堆栈内容                     display segment exception
+ /**
+  * @brief 
+  * 
+  * @param str           提示字符串
+  * @param esp_ptr 		 ESP（Extended Stack Pointer）为扩展栈指针寄存器,存放函数栈顶指针;EBP（Extended Base Pointer）用于存放函数栈底指针
+  * @param nr            error code
+  */
 static void die(char * str,long esp_ptr,long nr)
 {
 	long * esp = (long *) esp_ptr;
@@ -69,7 +84,7 @@ static void die(char * str,long esp_ptr,long nr)
 	printk("EIP:\t%04x:%p\nEFLAGS:\t%p\nESP:\t%04x:%p\n",
 		esp[1],esp[0],esp[2],esp[4],esp[3]);
 	printk("fs: %04x\n",_fs());
-	printk("base: %p, limit: %p\n",get_base(current->ldt[1]),get_limit(0x17));
+	printk("base: %p, limit: %p\n",get_base(current->ldt[1]),get_limit(0x17));     //get_base  is in sched.h 
 	if (esp[4] == 0x17) {
 		printk("Stack: ");
 		for (i=0;i<4;i++)
@@ -178,6 +193,11 @@ void do_reserved(long esp, long error_code)
 	die("reserved (15,17-47) error",esp,error_code);
 }
 
+
+// 下面是异常（陷阱）中断程序初始化子程序。设置它们的中断调用门（中断向量）。 
+ // set_trap_gate()与 set_system_gate()的主要区别在于前者设置的特权级为 0，后者是 3。因此 
+ // 断点陷阱中断 int3、溢出中断 overflow 和边界出错中断 bounds 可以由任何程序产生。 
+ // 这两个函数均是嵌入式汇编宏程序(include/asm/system.h,36,39)。
 void trap_init(void)
 {
 	int i;
