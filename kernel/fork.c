@@ -89,7 +89,7 @@ int copy_process(int nr,long ebp,long edi,long esi,long gs,long none,
 		return -EAGAIN;
 	task[nr] = p; 
 	*p = *current;	/* NOTE! this doesn't copy the supervisor stack */     //完全复制之前的进程的 task_struct   
-	p->state = TASK_UNINTERRUPTIBLE;
+	p->state = TASK_UNINTERRUPTIBLE;                                       //很重要，此时进程还未复制完成，不能被进程调度打断
 	p->pid = last_pid;
 	p->father = current->pid;
 	p->counter = p->priority;
@@ -138,7 +138,7 @@ int copy_process(int nr,long ebp,long edi,long esi,long gs,long none,
 		current->executable->i_count++;
 	set_tss_desc(gdt+(nr<<1)+FIRST_TSS_ENTRY,&(p->tss));
 	set_ldt_desc(gdt+(nr<<1)+FIRST_LDT_ENTRY,&(p->ldt));
-	p->state = TASK_RUNNING;	/* do this last, just in case */
+	p->state = TASK_RUNNING;	/* do this last, just in case */             //复制完成之后置为可运行状态
 	return last_pid;
 }
 

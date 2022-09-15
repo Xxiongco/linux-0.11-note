@@ -163,6 +163,7 @@ void ll_rw_block(int rw, struct buffer_head * bh)
 	make_request(major,rw,bh);
 }
 
+// 初始化读盘请求，32个元素，未来可能会串起来
 void blk_dev_init(void)
 {
 	int i;

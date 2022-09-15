@@ -105,6 +105,7 @@ struct tty_queue * table_list[]={
 	&tty_table[2].read_q, &tty_table[2].write_q
 	};
 
+// 初始化终端
 void tty_init(void)
 {
 	rs_init();          // 初始化串行中断程序和串行接口 1 和 2。(serial.c, 37)

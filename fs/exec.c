@@ -178,6 +178,16 @@ static unsigned long change_ldt(unsigned long text_size,unsigned long * page)
 
 /*
  * 'do_execve()' executes a new program.
+ * 
+ * 1 检查文件类型和权限等
+ * 2 读取文件的第一块数据到缓冲区
+ * 3 脚本文件与可执行文件的判断
+ * 4 校验可执行文件是否能执行
+ * 5 进程管理结构的调整
+ * 6 释放进程占有的页面
+ * 7 调整线性地址空间、参数列表、堆栈地址等
+ * 8 设置 eip 和 esp，完成摇身一变
+ *
  */
 int do_execve(unsigned long * eip,long tmp,char * filename,
 	char ** argv, char ** envp)
@@ -218,7 +228,7 @@ restart_interp:
 		retval = -ENOEXEC;
 		goto exec_error2;
 	}
-	if (!(bh = bread(inode->i_dev,inode->i_zone[0]))) {
+	if (!(bh = bread(inode->i_dev,inode->i_zone[0]))) {      // 根据 inode 读取文件第一块数据（1024KB）
 		retval = -EACCES;
 		goto exec_error2;
 	}

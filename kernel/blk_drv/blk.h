@@ -27,8 +27,8 @@ struct request {
 	unsigned long sector;      //表示起始扇区
 	unsigned long nr_sectors;   //扇区数
 	char * buffer;              //表示数据缓冲区，也就是读盘之后的数据放在内存中的什么位置
-	struct task_struct * waiting;    //
-	struct buffer_head * bh;         //buffer header
+	struct task_struct * waiting;    // task_struct 结构，这可以表示一个进程，也就表示是哪个进程发起了这个请求
+	struct buffer_head * bh;         //buffer header  缓冲区头指针
 	struct request * next;
 };
 

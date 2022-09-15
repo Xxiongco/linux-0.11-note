@@ -61,7 +61,7 @@ union task_union {
 static union task_union init_task = {INIT_TASK,};
 
 long volatile jiffies=0;
-long startup_time=0;                       // 开机时间。从 1970:0:0:0 开始计时的秒数
+long startup_time=0;                       // 开机时间。从 1970-1-1，0:0:0 开始计时的秒数
 struct task_struct *current = &(init_task.task);
 struct task_struct *last_task_used_math = NULL;      // 使用过协处理器任务的指针
 
@@ -337,10 +337,10 @@ void do_timer(long cpl)      //current priority level
 	}
 	if (current_DOR & 0xf0)
 		do_floppy_timer();
-	if ((--current->counter)>0) return;
+	if ((--current->counter)>0) return;   // 当前线程还有剩余时间片，直接返回
 	current->counter=0;
 	if (!cpl) return;
-	schedule();
+	schedule();                            // 若没有剩余时间片，调度
 }
 
 int sys_alarm(long seconds)
@@ -391,6 +391,7 @@ int sys_nice(long increment)
 	return 0;
 }
 
+// 进程调度初始化
 void sched_init(void)
 {
 	int i;
@@ -398,7 +399,7 @@ void sched_init(void)
 
 	if (sizeof(struct sigaction) != 16)
 		panic("Struct sigaction MUST be 16 bytes");
-	set_tss_desc(gdt+FIRST_TSS_ENTRY,&(init_task.task.tss));           // 设置初始任务
+	set_tss_desc(gdt+FIRST_TSS_ENTRY,&(init_task.task.tss));           // 设置初始任务, 非常重要：初始化进程0
 	set_ldt_desc(gdt+FIRST_LDT_ENTRY,&(init_task.task.ldt));
 	p = gdt+2+FIRST_TSS_ENTRY;
 	// 清任务数组和描述符表项（注意 i=1 开始，所以初始任务的描述符还在）。
@@ -412,15 +413,15 @@ void sched_init(void)
 /* Clear NT, so that we won't have troubles with that later on */
 /* 清除标志寄存器中的位 NT，这样以后就不会有麻烦 */
 	__asm__("pushfl ; andl $0xffffbfff,(%esp) ; popfl");
-	//给 idtr 寄存器赋值
+	//给 tr 寄存器赋值， 指向任务状态段 tss
 	ltr(0);
-	//给 gdtr 寄存器赋值
+	//给 ldtr 寄存器赋值, 指向局部描述符表 ldt
 	lldt(0);
 	// 下面代码用于初始化 8253 定时器
 	outb_p(0x36,0x43);		/* binary, mode 3, LSB/MSB, ch 0 */
 	outb_p(LATCH & 0xff , 0x40);	/* LSB */
-	outb(LATCH >> 8 , 0x40);	/* MSB */
+	outb(LATCH >> 8 , 0x40);	/* MSB */             //  这四行代码就开启了这个定时器，之后这个定时器变会持续的、以一定频率的向 CPU 发出中断信号， 中断处理程序为 timer_interrupt
 	set_intr_gate(0x20,&timer_interrupt);
 	outb(inb_p(0x21)&~0x01,0x21);
-	set_system_gate(0x80,&system_call);
+	set_system_gate(0x80,&system_call);          // 所有用户态程序想要调用内核提供的方法，都需要基于这个系统调用来进行
 }

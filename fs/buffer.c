@@ -12,6 +12,12 @@
  * sleep-on-calls. These should be extremely quick, though (I hope).
  */
 
+/* 
+ * 'buffer.c'用于实现缓冲区高速缓存功能。通过不让中断过程改变缓冲区，而是让调用者 
+ * 来执行，避免了竞争条件（当然除改变数据以外）。注意！由于中断可以唤醒一个调用者， 
+ * 因此就需要开关中断指令（cli-sti）序列来检测等待调用返回。但需要非常地快(希望是这样)。 
+ */
+
 /*
  * NOTE! There is one discordant note here: checking floppies for
  * disk change. This is where it fits best, I think, as it should
@@ -347,16 +353,21 @@ struct buffer_head * breada(int dev,int first, ...)
 	return (NULL);
 }
 
+// 缓冲区初始化
+// 参数 buffer_end 是指定的缓冲区内存的末端。对于系统有 16MB 内存，则缓冲区末端设置为 4MB。 
+// 对于系统有 8MB 内存，缓冲区末端设置为 2MB。
 void buffer_init(long buffer_end)
 {
 	struct buffer_head * h = start_buffer;
 	void * b;
 	int i;
 
-	if (buffer_end == 1<<20)      //2M
+// 如果缓冲区高端等于 1Mb，则由于从 640KB-1MB 被显示内存和 BIOS 占用，因此实际可用缓冲区内存 
+// 高端应该是 640KB。否则内存高端一定大于 1MB
+	if (buffer_end == 1<<20)      //1M
 		b = (void *) (640*1024);   // = A0000,  640k
 	else
-		b = (void *) buffer_end;
+		b = (void *) buffer_end;    // 这里采用2M为例
 	while ( (b -= BLOCK_SIZE) >= ((void *) (h+1)) ) {    //BLOCK_SIZE = 1024
 		h->b_dev = 0;
 		h->b_dirt = 0;
@@ -366,18 +377,18 @@ void buffer_init(long buffer_end)
 		h->b_wait = NULL;
 		h->b_next = NULL;
 		h->b_prev = NULL;
-		h->b_data = (char *) b;
+		h->b_data = (char *) b;         // 指向对应缓冲区数据块（1024 字节）
 		h->b_prev_free = h-1;
 		h->b_next_free = h+1;
 		h++;
-		NR_BUFFERS++;
-		if (b == (void *) 0x100000)
+		NR_BUFFERS++;                   // 缓冲区块数累加， 初始为0
+		if (b == (void *) 0x100000)     // 如果地址 b 递减到等于 1MB，则跳过 384KB， 让 b 指向地址 0xA0000(640KB)处，因为640k-1M碱有现存和BIOS信息
 			b = (void *) 0xA0000;
 	}
-	h--;
-	free_list = start_buffer;
+	h--;                                // 让 h 指向最后一个有效缓冲头
+	free_list = start_buffer;           // 让空闲链表头指向头一个缓冲区头 
 	free_list->b_prev_free = h;
-	h->b_next_free = free_list;
-	for (i=0;i<NR_HASH;i++)
+	h->b_next_free = free_list;         // 形成一个环链
+	for (i=0;i<NR_HASH;i++)             // 初始化 hash 表（哈希表、散列表），置表中所有的指针为 NULL
 		hash_table[i]=NULL;
 }	

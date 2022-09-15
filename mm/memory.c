@@ -42,7 +42,7 @@ __asm__("movl %%eax,%%cr3"::"a" (0))
 /* these are not to be changed without changing head.s etc */
 #define LOW_MEM 0x100000
 #define PAGING_MEMORY (15*1024*1024)
-#define PAGING_PAGES (PAGING_MEMORY>>12)          // 0xf00
+#define PAGING_PAGES (PAGING_MEMORY>>12)          // 0xf00 = 3840
 #define MAP_NR(addr) (((addr)-LOW_MEM)>>12)
 #define USED 100
 
@@ -396,6 +396,12 @@ void do_no_page(unsigned long error_code,unsigned long address)
 	oom();
 }
 
+// 假定内存为8M
+// start_mem = 2 * 1024 * 1024
+// end_mem = 8 * 1024 * 1024
+// PAGING_PAGES = 15*1024*1024 >> 12   mem_map 大小为3k，每一项映射一个4k的页面，数组较大，用以适配不同的内存大小
+// 注意mem_map支队1MB以上的内存分页进行管理
+// 将0~2M的内存标记为USED， 剩下的清零
 void mem_init(long start_mem, long end_mem)
 {
 	int i;

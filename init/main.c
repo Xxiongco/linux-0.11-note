@@ -74,12 +74,13 @@ inb_p(0x71); \
 
 #define BCD_TO_BIN(val) ((val)=((val)&15) + ((val)>>4)*10)     //4 bit for a decimal number 0~9, at most 99
 
+// 初始化时间， 从CMOS芯片中获取
 static void time_init(void)
 {
 	struct tm time;
 
 	do {
-		time.tm_sec = CMOS_READ(0);
+		time.tm_sec = CMOS_READ(0);             // 电源关闭时CMOS芯片中的RTC（Real Time Clock）由计算机内部的电池供电，保持活动状态
 		time.tm_min = CMOS_READ(2);
 		time.tm_hour = CMOS_READ(4);
 		time.tm_mday = CMOS_READ(7);
@@ -124,8 +125,8 @@ void main(void)		/* This really IS void, no error here. */
 #ifdef RAMDISK
 	main_memory_start += rd_init(main_memory_start, RAMDISK*1024);
 #endif
-	mem_init(main_memory_start,memory_end);
-	trap_init();
+	mem_init(main_memory_start,memory_end);                    //如果内存为8M，分布形式为  0          512k             2M             8M          
+	trap_init();                                               //                        |  内核程序  |   缓冲区       |     主内存    |   
 	blk_dev_init();
 	chr_dev_init();
 	tty_init();
