@@ -56,9 +56,9 @@
 extern void keyboard_interrupt(void);
 
 static unsigned char	video_type;		/* Type of display being used 使用的显示类型	*/
-static unsigned long	video_num_columns;	/* Number of text columns	*/
+static unsigned long	video_num_columns;	/* Number of text columns	*/    /* 屏幕文本列数 */
 static unsigned long	video_size_row;		/* Bytes per row		*/
-static unsigned long	video_num_lines;	/* Number of test lines		*/
+static unsigned long	video_num_lines;	/* Number of test lines		*/  /* 屏幕文本行数 */
 static unsigned char	video_page;		/* Initial video page		*/
 static unsigned long	video_mem_start;	/* Start of video RAM		*/
 static unsigned long	video_mem_end;		/* End of video RAM (sort of)	*/
@@ -66,18 +66,20 @@ static unsigned short	video_port_reg;		/* Video register select port	*/
 static unsigned short	video_port_val;		/* Video register value port	*/
 static unsigned short	video_erase_char;	/* Char+Attrib to erase with	*/
                                             /* 擦除字符属性与字符(0x0720) */
+											// 0x20是要显示的字符，0x20对应的字符是空格，0x07对应黑底白字显示方式，
+											// 以黑底白色的方式显示空格那就是一个黑色块
 
 // 以下这些变量用于屏幕卷屏操作。
-static unsigned long	origin;		/* Used for EGA/VGA fast scroll	*/
+static unsigned long	origin;		/* Used for EGA/VGA fast scroll	*/  /* 用于 EGA/VGA 快速滚屏 */ // 滚屏起始内存地址。
 static unsigned long	scr_end;	/* Used for EGA/VGA fast scroll	*/
-static unsigned long	pos;
-static unsigned long	x,y;
-static unsigned long	top,bottom;
+static unsigned long	pos;        // 当前光标对应的显示内存位置。
+static unsigned long	x,y;            // 当前光标位置。x表示列， y表示行，屏幕左上角为（0,0），右下方为第一象限
+static unsigned long	top,bottom;    // 滚动时顶行行号；底行行号
 // state 用于标明处理 ESC 转义序列时的当前步骤。npar,par[]用于存放 ESC 序列的中间处理参数
 static unsigned long	state=0;
 static unsigned long	npar,par[NPAR];
 static unsigned long	ques=0;
-static unsigned char	attr=0x07;   // 字符属性(黑底白字)
+static unsigned char	attr=0x07;   // 字符属性(黑底白字=0x07，其他还有加粗，反显等)
 
 static void sysbeep(void);
 
@@ -89,8 +91,10 @@ static void sysbeep(void);
 #define RESPONSE "\033[?1;2c"
 
 /* NOTE! gotoxy thinks x==video_num_columns is ok */
+// 前往新坐标，并更新光标对应现存位置
 static inline void gotoxy(unsigned int new_x,unsigned int new_y)
 {
+	// 如果输入的光标行号超出显示器列数，或者光标行号超出显示的最大行数，则退出。
 	if (new_x > video_num_columns || new_y >= video_num_lines)
 		return;
 	x=new_x;
@@ -115,7 +119,7 @@ static void scrup(void)
 {
 	if (video_type == VIDEO_TYPE_EGAC || video_type == VIDEO_TYPE_EGAM)
 	{
-		if (!top && bottom == video_num_lines) {
+		if (!top && bottom == video_num_lines) {        // top=0, bottom=最底部，表示整屏窗口向下移动
 			origin += video_size_row;
 			pos += video_size_row;
 			scr_end += video_size_row;
@@ -134,7 +138,7 @@ static void scrup(void)
 				scr_end -= origin-video_mem_start;
 				pos -= origin-video_mem_start;
 				origin = video_mem_start;
-			} else {
+			} else {                                     
 				__asm__("cld\n\t"
 					"rep\n\t"
 					"stosw"
@@ -144,12 +148,14 @@ static void scrup(void)
 					:"cx","di");
 			}
 			set_origin();
-		} else {
-			__asm__("cld\n\t"
-				"rep\n\t"
-				"movsl\n\t"
-				"movl _video_num_columns,%%ecx\n\t"
-				"rep\n\t"
+		} else {                                           // 否则表示不是整屏移动
+		// 从指定行top开始的所有行向上移动1行（删除1行）， 直接将屏幕从top到末端显示
+		// 内存数据向上移动1行， 并在新出现的行上填入擦除字符
+			__asm__("cld\n\t"                          // 清方向位。
+				"rep\n\t"                              // 循环操作，将 top+1 到 bottom 行
+				"movsl\n\t"                            // 所对应的内存块移到 top 行开始处。
+				"movl _video_num_columns,%%ecx\n\t"    // ecx = 1 行字符数。
+				"rep\n\t"                              // 在新行上填入擦除字符。
 				"stosw"
 				::"a" (video_erase_char),
 				"c" ((bottom-top-1)*video_num_columns>>1),
@@ -221,6 +227,7 @@ static void lf(void)
 		pos += video_size_row;
 		return;
 	}
+	// 如果光标在bottom，需要将屏幕上移一行
 	scrup();
 }
 
@@ -246,8 +253,10 @@ static void cr(void)
 static void del(void)
 {
 	if (x) {
+		// pos 后退 2 字节(对应屏幕上一个字符)，
 		pos -= 2;
 		x--;
+		// 将光标所在位置字符擦除
 		*(unsigned short *)pos = video_erase_char;
 	}
 }
@@ -321,6 +330,7 @@ static void csi_K(int par)
 }
 
  //// 允许翻译(重显)（允许重新设置字符显示方式，比如加粗、加下划线、闪烁、反显等）。 
+//  设置字体格式，但是不包括颜色
  // ANSI 转义字符序列：'ESC [nm'。n = 0 正常显示；1 加粗；4 加下划线；7 反显；27 正常显示。
 void csi_m(void)
 {
@@ -363,13 +373,15 @@ static void respond(struct tty_struct * tty)
 	copy_to_cooked(tty);   // 转换成规范模式(放入辅助队列中)。
 }
 
- //// 在光标处插入一空格字符
+ //// 在光标处插入一字符
 static void insert_char(void)
 {
 	int i=x;
 	unsigned short tmp, old = video_erase_char;
 	unsigned short * p = (unsigned short *) pos;
 
+// 光标开始的所有字符右移一格，并将擦除字符插入在光标所在处。 
+ // 若一行上都有字符的话，则行最后一个字符将不会更动☺?
 	while (i++<video_num_columns) {
 		tmp=*p;
 		*p=old;
@@ -378,6 +390,8 @@ static void insert_char(void)
 	}
 }
 
+//// 在光标处插入一行（则光标将处在新的空行上）。 
+ // 将屏幕从光标所在行到屏幕底向下卷动一行。
 static void insert_line(void)
 {
 	int oldtop,oldbottom;
@@ -391,6 +405,7 @@ static void insert_line(void)
 	bottom=oldbottom;
 }
 
+//// 删除光标处的一个字符。
 static void delete_char(void)
 {
 	int i;
@@ -406,6 +421,8 @@ static void delete_char(void)
 	*p = video_erase_char;
 }
 
+//// 删除光标所在行。 
+ // 从光标所在行开始屏幕内容上卷一行
 static void delete_line(void)
 {
 	int oldtop,oldbottom;
@@ -468,15 +485,17 @@ static void csi_M(unsigned int nr)
 		delete_line();
 }
 
-static int saved_x=0;
-static int saved_y=0;
+static int saved_x=0;   // 保存的光标列号。
+static int saved_y=0;   // 保存的光标行号。
 
+//// 保存当前光标位置。
 static void save_cur(void)
 {
 	saved_x=x;
 	saved_y=y;
 }
 
+//// 恢复保存的光标位置。
 static void restore_cur(void)
 {
 	gotoxy(saved_x, saved_y);
@@ -489,7 +508,7 @@ void con_write(struct tty_struct * tty)
 	int nr;
 	char c;
 
-    // 首先取得写缓冲队列中现有字符数 nr，然后针对每个字符进行处理。
+    // 首先取得写缓冲队列中现有字符数 nr，然后针对每个字符进行处理。  nr表示字符个数
 	nr = CHARS(tty->write_q);
 	while (nr--) {
  // 从写队列中取一字符 c，根据前面所处理字符的状态 state 分别处理。状态之间的转换关系为： 
@@ -541,19 +560,19 @@ void con_write(struct tty_struct * tty)
 				break;
 			case 1:
 				state=0;
-				if (c=='[')
+				if (c=='[')               // 如果字符 c 是'['，则将状态 state 转到 2
 					state=2;
-				else if (c=='E')
+				else if (c=='E')         // 如果字符 c 是'E'，则光标移到下一行开始处(0 列)
 					gotoxy(0,y+1);
-				else if (c=='M')
+				else if (c=='M')         // 如果字符 c 是'M'，则光标上移一行
 					ri();
-				else if (c=='D')
+				else if (c=='D')         // 如果字符 c 是'D'，则光标下移一行
 					lf();
-				else if (c=='Z')
+				else if (c=='Z')         // 如果字符 c 是'Z'，则发送终端应答字符序列   
 					respond(tty);
-				else if (x=='7')
+				else if (x=='7')         // 如果字符 c 是'7'，则保存当前光标位置, 注意这里代码写错！应该是(c=='7')
 					save_cur();
-				else if (x=='8')
+				else if (x=='8')         // 如果字符 c 是'8'，则恢复到原保存的光标位置。注意这里代码写错！应该是(c=='8')
 					restore_cur();
 				break;
 			case 2:
@@ -576,65 +595,65 @@ void con_write(struct tty_struct * tty)
 			case 4:
 				state=0;
 				switch(c) {
-					case 'G': case '`':
+					case 'G': case '`':                     // CSI n G; 若n=0, 光标右移一格
 						if (par[0]) par[0]--;
 						gotoxy(par[0],y);
 						break;
-					case 'A':
+					case 'A':                              // CSI n A; 若n=0,光标上移一行
 						if (!par[0]) par[0]++;
 						gotoxy(x,y-par[0]);
 						break;
-					case 'B': case 'e':
+					case 'B': case 'e':                    // CSI n B; cursor down
 						if (!par[0]) par[0]++;
 						gotoxy(x,y+par[0]);
 						break;
-					case 'C': case 'a':
+					case 'C': case 'a':                    // CSI n C; cursor forward
 						if (!par[0]) par[0]++;
 						gotoxy(x+par[0],y);
 						break;
-					case 'D':
+					case 'D':                              // CSI n D; cursor back
 						if (!par[0]) par[0]++;
 						gotoxy(x-par[0],y);
 						break;
-					case 'E':
+					case 'E':                              // CSI n E; cursor next line
 						if (!par[0]) par[0]++;
 						gotoxy(0,y+par[0]);
 						break;
-					case 'F':
+					case 'F':                             // CSI n F; cursor previous line
 						if (!par[0]) par[0]++;
 						gotoxy(0,y-par[0]);
 						break;
-					case 'd':
+					case 'd':                            // CSI n d; cursor jump to line n
 						if (par[0]) par[0]--;
 						gotoxy(x,par[0]);
 						break;
-					case 'H': case 'f':
+					case 'H': case 'f':                  // CSI n ; m H;  cursor jump to line n, col m
 						if (par[0]) par[0]--;
 						if (par[1]) par[1]--;
 						gotoxy(par[1],par[0]);
 						break;
-					case 'J':
+					case 'J':                            // CSI n J;  Erase in Display
 						csi_J(par[0]);
 						break;
-					case 'K':
+					case 'K':                           // CSI n K; erase in line
 						csi_K(par[0]);
 						break;
-					case 'L':
+					case 'L':                           // CSI n L; insert lines
 						csi_L(par[0]);
 						break;
-					case 'M':
+					case 'M':                           // CSI n M; del n lines
 						csi_M(par[0]);
 						break;
-					case 'P':
+					case 'P':                           // CSI n P; del n characters 
 						csi_P(par[0]);
 						break;
-					case '@':
+					case '@':                           // CSI n @; insert n characters
 						csi_at(par[0]);
 						break;
-					case 'm':
+					case 'm':                           // CSI n m; Select Graphic Rendition, 改变字符显示属性
 						csi_m();
 						break;
-					case 'r':
+					case 'r':                           // 如果字符 c 是'r'，则表示用两个参数设置滚屏的起始行号和终止行号
 						if (par[0]) par[0]--;
 						if (!par[1]) par[1] = video_num_lines;
 						if (par[0] < par[1] &&
@@ -643,10 +662,10 @@ void con_write(struct tty_struct * tty)
 							bottom=par[1];
 						}
 						break;
-					case 's':
+					case 's':                          // 如果字符 c 是's'，则表示保存当前光标所在位置
 						save_cur();
 						break;
-					case 'u':
+					case 'u':                          // 如果字符 c 是'u'，则表示恢复光标到原保存的位置处
 						restore_cur();
 						break;
 				}
