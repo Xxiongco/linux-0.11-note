@@ -135,26 +135,30 @@ int sys_chown(const char * filename,int uid,int gid)
 	return 0;
 }
 
+//// 打开（或创建）文件系统调用函数
+// flag:  O_RDONLY、只写 O_WRONLY 读写 O_RDWR   O_CREAT、O_EXCL、O_APPEND
+// mode: 文件宿主，用户和组相关属性
 int sys_open(const char * filename,int flag,int mode)
 {
 	struct m_inode * inode;
 	struct file * f;
 	int i,fd;
 
+	// 将用户设置的模式与进程的模式屏蔽码相与，产生许可的文件模式
 	mode &= 0777 & ~current->umask;
-	for(fd=0 ; fd<NR_OPEN ; fd++)
-		if (!current->filp[fd])
+	for(fd=0 ; fd<NR_OPEN ; fd++) 
+		if (!current->filp[fd])    // 查找一个filp中的空闲项
 			break;
 	if (fd>=NR_OPEN)
 		return -EINVAL;
 	current->close_on_exec &= ~(1<<fd);
 	f=0+file_table;
-	for (i=0 ; i<NR_FILE ; i++,f++)
-		if (!f->f_count) break;
+	for (i=0 ; i<NR_FILE ; i++,f++)   
+		if (!f->f_count) break;    // 搜索file_table中的空闲文件结构项
 	if (i>=NR_FILE)
 		return -EINVAL;
-	(current->filp[fd]=f)->f_count++;
-	if ((i=open_namei(filename,flag,mode,&inode))<0) {
+	(current->filp[fd]=f)->f_count++;    // 让进程的对应文件句柄的文件结构指针指向搜索到的文件结构，并令句柄引用计数递增 1
+	if ((i=open_namei(filename,flag,mode,&inode))<0) {    // 获取文件i节点
 		current->filp[fd]=NULL;
 		f->f_count=0;
 		return i;

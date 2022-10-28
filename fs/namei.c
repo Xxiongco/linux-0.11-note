@@ -337,6 +337,9 @@ struct m_inode * namei(const char * pathname)
 int open_namei(const char * pathname, int flag, int mode,
 	struct m_inode ** res_inode)
 {
+	//// 文件打开 name i 函数
+	// 参数：pathname - 文件路径名；flag - 文件打开标志；mode - 文件访问许可属性； 
+    // 返回：成功返回 0，否则返回出错码；res_inode - 返回的对应文件路径名的的 i 节点指针。
 	const char * basename;
 	int inr,dev,namelen;
 	struct m_inode * dir, *inode;
@@ -347,7 +350,7 @@ int open_namei(const char * pathname, int flag, int mode,
 		flag |= O_WRONLY;
 	mode &= 0777 & ~current->umask;
 	mode |= I_REGULAR;
-	if (!(dir = dir_namei(pathname,&namelen,&basename)))
+	if (!(dir = dir_namei(pathname,&namelen,&basename)))   // 根据路径名寻找到对应的 i 节点，以及最顶端文件名及其长度
 		return -ENOENT;
 	if (!namelen) {			/* special case: '/usr/' etc */
 		if (!(flag & (O_ACCMODE|O_CREAT|O_TRUNC))) {
@@ -357,7 +360,7 @@ int open_namei(const char * pathname, int flag, int mode,
 		iput(dir);
 		return -EISDIR;
 	}
-	bh = find_entry(&dir,basename,namelen,&de);
+	bh = find_entry(&dir,basename,namelen,&de);  // 在 dir 节点对应的目录中取文件名对应的目录项结构 de 和该目录项所在的高速缓冲区。
 	if (!bh) {
 		if (!(flag & O_CREAT)) {
 			iput(dir);

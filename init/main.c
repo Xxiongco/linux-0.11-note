@@ -178,13 +178,15 @@ void init(void)
 	printf("%d buffers = %d bytes buffer space\n\r",NR_BUFFERS,
 		NR_BUFFERS*BLOCK_SIZE);                               // 打印缓冲区块数和总字节数，每块 1024 字节
 	printf("Free mem: %d bytes\n\r",memory_end-main_memory_start);
-	if (!(pid=fork())) {                                      //child process
+	if (!(pid=fork())) {                                      // 进程1创建进程2！！！！
 		close(0);
-		if (open("/etc/rc",O_RDONLY,0))
+		if (open("/etc/rc",O_RDONLY,0))         // 以只读形式打开rc文件（配置文件），占据0号文件描述符
 			_exit(1);
-		execve("/bin/sh",argv_rc,envp_rc);
-		_exit(2);
+		execve("/bin/sh",argv_rc,envp_rc);       // 加载shell程序. 此shell程序读取rc文件并启动update进程，用于同步缓冲区的数据到外设
+		_exit(2);                                // 每隔一段时间，update程序会被唤醒
 	}
+	// shell加载普通文件 如/etc/rc 后会退出，所以下面需要重新启动一个shell
+	// shell加载字符设备文件不会退出， 如/dev/tty0
 	if (pid>0)                                                //parent process
 		while (pid != wait(&i))                               //父进程等待子进程的结束。&i 是存放返回状态信息的位置。
 			/* nothing */;
@@ -196,9 +198,9 @@ void init(void)
 		if (!pid) {
 			close(0);close(1);close(2);
 			setsid();
-			(void) open("/dev/tty0",O_RDWR,0);
-			(void) dup(0);
-			(void) dup(0);
+			(void) open("/dev/tty0",O_RDWR,0);     // 标准输入设备 stdin
+			(void) dup(0);                         // 标准输出设备 stdout
+			(void) dup(0);                         // 标准错误输出设备 stderr
 			_exit(execve("/bin/sh",argv,envp));
 		}
 		while (1)
