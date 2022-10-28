@@ -137,7 +137,7 @@ void main(void)		/* This really IS void, no error here. */
 	floppy_init();
 	sti();
 	move_to_user_mode();
-	if (!fork()) {		/* we count on this going ok */
+	if (!fork()) {		/* we count on this going ok */       // 进程1
 		init();                                               //child process
 	}
 /*

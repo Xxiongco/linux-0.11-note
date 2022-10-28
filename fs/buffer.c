@@ -272,19 +272,20 @@ void brelse(struct buffer_head * buf)
  * bread() reads a specified block and returns the buffer that contains
  * it. It returns NULL if the block was unreadable.
  */
+//// 从指定设备上读取指定的数据块
 struct buffer_head * bread(int dev,int block)
 {
 	struct buffer_head * bh;
 
-	if (!(bh=getblk(dev,block)))
+	if (!(bh=getblk(dev,block)))                  // 在高速缓冲中申请一块缓冲区
 		panic("bread: getblk returned NULL\n");
-	if (bh->b_uptodate)
+	if (bh->b_uptodate)                           // 如果该缓冲区中的数据是有效的（已更新的）可以直接使用
 		return bh;
-	ll_rw_block(READ,bh);
+	ll_rw_block(READ,bh);             // 否则调用 ll_rw_block()函数，产生读设备块请求。并等待缓冲区解锁
 	wait_on_buffer(bh);
-	if (bh->b_uptodate)
+	if (bh->b_uptodate)               // 如果该缓冲区已更新，则返回缓冲区头指针，退出
 		return bh;
-	brelse(bh);
+	brelse(bh);                       // 否则表明读设备操作失败，释放该缓冲区，返回 NULL 指针，退出
 	return NULL;
 }
 
