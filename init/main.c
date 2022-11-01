@@ -57,8 +57,8 @@ extern long startup_time;
  * This is set up by the setup-routine at boot-time
  */
 #define EXT_MEM_K (*(unsigned short *)0x90002)                   //1M 以后的扩展内存大小
-#define DRIVE_INFO (*(struct drive_info *)0x90080)
-#define ORIG_ROOT_DEV (*(unsigned short *)0x901FC)
+#define DRIVE_INFO (*(struct drive_info *)0x90080)          // 来自BIOS信息，硬盘参数表（机器系统数据）
+#define ORIG_ROOT_DEV (*(unsigned short *)0x901FC)          // 来自BIOS信息，根设备号（软盘）
 
 /*
  * Yeah, yeah, it's ugly, but I cannot find how to do this correctly
@@ -109,12 +109,20 @@ void main(void)		/* This really IS void, no error here. */
  * Interrupts are still disabled. Do necessary setups, then
  * enable them
  */
+/* 
+ * 此时中断仍被禁止着，做完必要的设置后就将其开启。 
+ */
+// 下面这段代码用于保存： 
+ // 根设备号 ÎROOT_DEV； 高速缓存末端地址Î buffer_memory_end； 
+ // 机器内存数Î memory_end；主内存开始地址 Îmain_memory_start；
  	ROOT_DEV = ORIG_ROOT_DEV;
  	drive_info = DRIVE_INFO;
-	memory_end = (1<<20) + (EXT_MEM_K<<10);
-	memory_end &= 0xfffff000;
+	memory_end = (1<<20) + (EXT_MEM_K<<10);        // 内存大小=1Mb 字节+扩展内存(k)*1024 字节
+	memory_end &= 0xfffff000;                      // 忽略不到 4Kb（1 页）的内存数
+	// 假设物理内存为16M，进入第二个分支
+	// 主内存开始地址和缓冲区结束地址相同，均为4M位置
 	if (memory_end > 16*1024*1024)
-		memory_end = 16*1024*1024;
+		memory_end = 16*1024*1024;    // 如果内存超过 16Mb，则按 16Mb 计
 	if (memory_end > 12*1024*1024) 
 		buffer_memory_end = 4*1024*1024;
 	else if (memory_end > 6*1024*1024)
@@ -125,9 +133,11 @@ void main(void)		/* This really IS void, no error here. */
 #ifdef RAMDISK
 	main_memory_start += rd_init(main_memory_start, RAMDISK*1024);
 #endif
-	mem_init(main_memory_start,memory_end);                    //如果内存为8M，分布形式为  0          512k             2M             8M          
-	trap_init();                                               //                        |  内核程序  |   缓冲区       |     主内存    |   
-	blk_dev_init();
+	mem_init(main_memory_start,memory_end);                    //如果内存为8M，分布形式为  0          512k             4M          6M            16M          
+	// 中断表与函数挂接                                         //                        |  内核程序  |   缓冲区       |   虚拟盘  |    主内存    | 
+	trap_init();                                                 
+	//  初始化request[32] 请求项， 用于缓冲区与块设备之间的沟通协调
+	blk_dev_init();           
 	chr_dev_init();
 	tty_init();
 	time_init();

@@ -56,11 +56,11 @@ long rd_init(long mem_start, int length)
 	int	i;
 	char	*cp;
 
-	blk_dev[MAJOR_NR].request_fn = DEVICE_REQUEST;
+	blk_dev[MAJOR_NR].request_fn = DEVICE_REQUEST;    // 第二项挂接
 	rd_start = (char *) mem_start;
 	rd_length = length;
 	cp = rd_start;
-	for (i=0; i < length; i++)             //将内存全部置0
+	for (i=0; i < length; i++)             //将内存中的虚拟盘区位置全部置0
 		*cp++ = '\0';   
 	return(length);
 }

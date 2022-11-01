@@ -2,7 +2,7 @@
 ! SYS_SIZE is the number of clicks (16 bytes) to be loaded.
 ! 0x3000 is 0x30000 bytes = 196kB, more than enough for current
 ! versions of linuxd
-!
+! 定义的size后需要加0  192K？？
 SYSSIZE = 0x3000
 !
 !	bootsect.s		(C) 1991 Linus Torvalds
@@ -31,6 +31,7 @@ begdata:
 begbss:
 .text
 
+！ 定义的SEG后都需要加0
 SETUPLEN = 4				! nr of setup-sectors
 BOOTSEG  = 0x07c0			! original address of boot-sector
 INITSEG  = 0x9000			! we move boot here - out of the way
