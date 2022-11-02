@@ -62,6 +62,7 @@ static unsigned char mem_map [ PAGING_PAGES ] = {0,};
  */
 unsigned long get_free_page(void)
 {
+	// 在mem_map 中反向扫描得到空闲页面，故从16M高地址开始分配页面
 register unsigned long __res asm("ax");
 
 __asm__("std ; repne ; scasb\n\t"
@@ -147,36 +148,38 @@ int free_page_tables(unsigned long from,unsigned long size)
  * 1 Mb-range, so the pages can be shared with the kernel. Thus the
  * special case for nr=xxxx.
  */
-int copy_page_tables(unsigned long from,unsigned long to,long size)
+int copy_page_tables(unsigned long from,unsigned long to,long size)    //// 复制进程的页目录页表
 {
+	// 进程1创建时 from = 0, to = 64M，  size = 640k或160个页面
 	unsigned long * from_page_table;
 	unsigned long * to_page_table;
 	unsigned long this_page;
 	unsigned long * from_dir, * to_dir;
 	unsigned long nr;
 
-	if ((from&0x3fffff) || (to&0x3fffff))
+	if ((from&0x3fffff) || (to&0x3fffff))    // 源地址和目的地址都需要是 4Mb 的倍数。否则出错，死机
 		panic("copy_page_tables called with wrong alignment");
+	// 取得源地址和目的地址的目录项(from_dir 和 to_dir)	 分别是0和64
 	from_dir = (unsigned long *) ((from>>20) & 0xffc); /* _pg_dir = 0 */
 	to_dir = (unsigned long *) ((to>>20) & 0xffc);
-	size = ((unsigned) (size+0x3fffff)) >> 22;
+	size = ((unsigned) (size+0x3fffff)) >> 22;     // 计算要复制的内存块占用的页表数  4M（1个页目录项管理的页面大小 = 1024*4K）的数量
 	for( ; size-->0 ; from_dir++,to_dir++) {
-		if (1 & *to_dir)
+		if (1 & *to_dir)                 // 如果目的目录项指定的页表已经存在，死机
 			panic("copy_page_tables: already exist");
-		if (!(1 & *from_dir))
+		if (!(1 & *from_dir))            // 如果源目录项未被使用，不用复制，跳过
 			continue;
 		from_page_table = (unsigned long *) (0xfffff000 & *from_dir);
-		if (!(to_page_table = (unsigned long *) get_free_page()))
+		if (!(to_page_table = (unsigned long *) get_free_page()))     // // 为目的页表取一页空闲内存. 关键！！是目的页表存储的地址
 			return -1;	/* Out of memory, see freeing */
-		*to_dir = ((unsigned long) to_page_table) | 7;
-		nr = (from==0)?0xA0:1024;
-		for ( ; nr-- > 0 ; from_page_table++,to_page_table++) {
-			this_page = *from_page_table;
+		*to_dir = ((unsigned long) to_page_table) | 7;    // 设置目的目录项信息。7 是标志信息，表示(Usr, R/W, Present)
+		nr = (from==0)?0xA0:1024;              // 如果是进程0复制给进程1，则复制160个页面；否则将1024个页面全部复制
+		for ( ; nr-- > 0 ; from_page_table++,to_page_table++) {    
+			this_page = *from_page_table;     // 复制！
 			if (!(1 & this_page))
 				continue;
-			this_page &= ~2;
-			*to_page_table = this_page;
-			if (this_page > LOW_MEM) {
+			this_page &= ~2;         // 010， 代表用户，只读，存在
+			*to_page_table = this_page;       // 复制！
+			if (this_page > LOW_MEM) {    // 如果该页表项所指页面的地址在 1M 以上，则需要设置内存页面映射数组 mem_map[]
 				*from_page_table = this_page;
 				this_page -= LOW_MEM;
 				this_page >>= 12;
@@ -184,7 +187,7 @@ int copy_page_tables(unsigned long from,unsigned long to,long size)
 			}
 		}
 	}
-	invalidate();
+	invalidate();     // 刷新页变换高速缓冲
 	return 0;
 }
 

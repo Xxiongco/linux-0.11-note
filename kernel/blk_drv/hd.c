@@ -73,7 +73,9 @@ extern void hd_interrupt(void);
 extern void rd_load(void);
 
 /* This may be used only once, enforced by 'static int callable' */
-//取得BIOS信息，硬盘信息，加载主存，安装根文件系统
+//取得BIOS信息，硬盘信息，加载主存，安装根文件系统   用静态变量 callable 作为可调用标志
+// 该函数的参数由初始化程序 init/main.c 的 init 子程序设置为指向 0x90080 处，此处存放着 setup.s
+// 程序从 BIOS 取得的 2 个硬盘的基本参数表(32 字节)。
 int sys_setup(void * BIOS)
 {
 	static int callable = 1;              //第二次调用本函数时本行不生效!!!!
@@ -97,12 +99,15 @@ int sys_setup(void * BIOS)
 		hd_info[drive].sect = *(unsigned char *) (14+BIOS);
 		BIOS += 16;
 	}
+
+	// setup.s 程序在取 BIOS 中的硬盘参数表信息时，如果只有 1 个硬盘，就会将对应第 2 个硬盘的 
+    // 16 字节全部清零。因此这里只要判断第 2 个硬盘柱面数是否为 0 就可以知道有没有第 2 个硬盘了。
 	if (hd_info[1].cyl)
 		NR_HD=2;
 	else
 		NR_HD=1;
 #endif
-// 设置每个硬盘的起始扇区号和扇区总数
+// 设置每个硬盘的起始扇区号和扇区总数；  1个硬盘最多可以分出4个逻辑盘，0是物理盘，1~4是逻辑盘，共5个
 	for (i=0 ; i<NR_HD ; i++) {
 		hd[i*5].start_sect = 0;
 		hd[i*5].nr_sects = hd_info[i].head*
@@ -144,9 +149,9 @@ int sys_setup(void * BIOS)
 	}
 	// 读取每一个硬盘上第 1 块数据（第 1 个扇区有用），获取其中的分区表信息
 	// 然后根据硬盘头 1 个扇区位置 0x1fe 处的两个字节是否为'55AA'来判断 
- // 该扇区中位于 0x1BE 开始的分区表是否有效
+    // 该扇区中位于 0x1BE 开始的分区表是否有效
 	for (drive=0 ; drive<NR_HD ; drive++) {
-		if (!(bh = bread(0x300 + drive*5,0))) {
+		if (!(bh = bread(0x300 + drive*5,0))) {         // 第一个物理盘的设备号是0x300，第2个是0x305；读取每个物理硬盘的0号块，即引导块，有分区信息
 			printk("Unable to read partition table of drive %d\n\r",
 				drive);
 			panic("");

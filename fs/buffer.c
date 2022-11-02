@@ -40,6 +40,7 @@ static struct buffer_head * free_list;
 static struct task_struct * buffer_wait = NULL;
 int NR_BUFFERS = 0;
 
+//// 等待指定缓冲区解锁
 static inline void wait_on_buffer(struct buffer_head * bh)
 {
 	cli();
@@ -133,6 +134,7 @@ void check_disk_change(int dev)
 	invalidate_buffers(dev);
 }
 
+// 初次调用   (0x300^0)%307 = 154
 #define _hashfn(dev,block) (((unsigned)(dev^block))%NR_HASH)
 #define hash(dev,block) hash_table[_hashfn(dev,block)]
 
@@ -171,6 +173,7 @@ static inline void insert_into_queues(struct buffer_head * bh)
 	bh->b_next->b_prev = bh;
 }
 
+// 在缓冲区查找指定的缓冲块， 初次调用dev = 0x300, block = 0
 static struct buffer_head * find_buffer(int dev, int block)
 {		
 	struct buffer_head * tmp;
@@ -210,18 +213,26 @@ struct buffer_head * get_hash_table(int dev, int block)
  *
  * The algoritm is changed: hopefully better, and an elusive bug removed.
  */
+// 下面宏定义用于同时判断缓冲区的修改标志和锁定标志，并且定义修改标志的权重要比锁定标志大
 #define BADNESS(bh) (((bh)->b_dirt<<1)+(bh)->b_lock)
+// 在缓冲区获得空闲缓冲块，首次调用时， dev = 0x300, block = 0
 struct buffer_head * getblk(int dev,int block)
 {
 	struct buffer_head * tmp, * bh;
 
 repeat:
+    // 搜索 hash 表，如果指定块已经在高速缓冲中，则返回对应缓冲区头指针，退出
 	if (bh = get_hash_table(dev,block))
 		return bh;
+	// 扫描空闲数据块链表，寻找空闲缓冲区	 
 	tmp = free_list;
 	do {
-		if (tmp->b_count)
+		if (tmp->b_count)        // 如果该缓冲区正被使用（引用计数不等于 0），则继续扫描下一项
 			continue;
+
+		// 如果缓冲区头指针 bh 为空，或者 tmp 所指缓冲区头的标志(修改、锁定)少于(小于)bh 头的标志， 
+ 		// 则让 bh 指向该 tmp 缓冲区头。如果该 tmp 缓冲区头表明缓冲区既没有修改也没有锁定标志置位， 
+ 		// 则说明已为指定设备上的块取得对应的高速缓冲区，则退出循环	
 		if (!bh || BADNESS(tmp)<BADNESS(bh)) {
 			bh = tmp;
 			if (!BADNESS(tmp))
@@ -230,13 +241,15 @@ repeat:
 /* and repeat until we find something good */
 	} while ((tmp = tmp->b_next_free) != free_list);
 	if (!bh) {
+		// 如果所有缓冲区都正被使用（所有缓冲区的头部引用计数都>0），则睡眠，等待有空闲的缓冲区可用
 		sleep_on(&buffer_wait);
 		goto repeat;
 	}
+	// 等待该缓冲区解锁（如果已被上锁的话）
 	wait_on_buffer(bh);
 	if (bh->b_count)
 		goto repeat;
-	while (bh->b_dirt) {
+	while (bh->b_dirt) {        // 如果该缓冲区已被修改，则将数据写盘，并再次等待缓冲区解锁
 		sync_dev(bh->b_dev);
 		wait_on_buffer(bh);
 		if (bh->b_count)
@@ -244,16 +257,25 @@ repeat:
 	}
 /* NOTE!! While we slept waiting for this block, somebody else might */
 /* already have added "this" block to the cache. check it */
+/* 注意！！当进程为了等待该缓冲块而睡眠时，其它进程可能已经将该缓冲块 */ 
+/*  加入进高速缓冲中，所以要对此进行检查。*/ 
+ // 在高速缓冲 hash 表中检查指定设备和块的缓冲区是否已经被加入进去。如果是的话，就再次重复 
+ // 上述过程。
 	if (find_buffer(dev,block))
 		goto repeat;
 /* OK, FINALLY we know that this buffer is the only one of it's kind, */
 /* and that it's unused (b_count=0), unlocked (b_lock=0), and clean */
+/* OK，最终我们知道该缓冲区是指定参数的唯一一块，*/ 
+ /* 而且还没有被使用(b_count=0)，未被上锁(b_lock=0)，并且是干净的（未被修改的）*/ 
+ // 于是让我们占用此缓冲区。置引用计数为 1，复位修改标志和有效(更新)标志。
 	bh->b_count=1;
 	bh->b_dirt=0;
 	bh->b_uptodate=0;
+	// 从 hash 队列和空闲块链表中移出该缓冲区头，让该缓冲区用于指定设备和其上的指定块。
 	remove_from_queues(bh);
 	bh->b_dev=dev;
 	bh->b_blocknr=block;
+	// 然后根据此新的设备号和块号重新插入空闲链表和 hash 队列新位置处。并最终返回缓冲头指针
 	insert_into_queues(bh);
 	return bh;
 }

@@ -133,19 +133,27 @@ void main(void)		/* This really IS void, no error here. */
 #ifdef RAMDISK
 	main_memory_start += rd_init(main_memory_start, RAMDISK*1024);
 #endif
-	mem_init(main_memory_start,memory_end);                    //如果内存为8M，分布形式为  0          512k             4M          6M            16M          
+	mem_init(main_memory_start,memory_end);                    //如果内存为8M，分布形式为  0          2M             4M          6M            16M          
 	// 中断表与函数挂接                                         //                        |  内核程序  |   缓冲区       |   虚拟盘  |    主内存    | 
 	trap_init();                                                 
 	//  初始化request[32] 请求项， 用于缓冲区与块设备之间的沟通协调
-	blk_dev_init();           
+	blk_dev_init(); 
+	// 初始化字符设备，目前为空函数   
 	chr_dev_init();
+	// 初始化串行口， 包括串口和控制台（serial.c console.c)
 	tty_init();
+	// 初始化时间
 	time_init();
+	// 初始化进程0
 	sched_init();
+	// 缓冲区初始化
 	buffer_init(buffer_memory_end);
+	// 硬盘软盘初始化
 	hd_init();
 	floppy_init();
+	// 开启中断
 	sti();
+	// 进程均为3特权等级，此处的进程0也需要翻转到3用户态模式
 	move_to_user_mode();
 	if (!fork()) {		/* we count on this going ok */       // 进程1
 		init();                                               //child process

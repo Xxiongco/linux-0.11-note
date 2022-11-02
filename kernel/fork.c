@@ -46,8 +46,8 @@ int copy_mem(int nr,struct task_struct * p)
 	unsigned long old_data_base,new_data_base,data_limit;
 	unsigned long old_code_base,new_code_base,code_limit;
 
-	code_limit=get_limit(0x0f);
-	data_limit=get_limit(0x17);
+	code_limit=get_limit(0x0f);        // 0x0f = 00001111: 代码段，LDT，3特权级
+	data_limit=get_limit(0x17);        // 0x17 = 00010111: 数据段，LDT，3特权级
 	old_code_base = get_base(current->ldt[1]);
 	old_data_base = get_base(current->ldt[2]);
 	if (old_data_base != old_code_base)
@@ -58,7 +58,7 @@ int copy_mem(int nr,struct task_struct * p)
 	p->start_code = new_code_base;
 	set_base(p->ldt[1],new_code_base);    // 设置代码段描述符中基址域
 	set_base(p->ldt[2],new_data_base);    // 设置数据段描述符中基址域
-	if (copy_page_tables(old_data_base,new_data_base,data_limit)) {
+	if (copy_page_tables(old_data_base,new_data_base,data_limit)) {       // 复制代码和数据段
 		free_page_tables(new_data_base,data_limit);
 		return -ENOMEM;
 	}
