@@ -60,6 +60,9 @@ static int permission(struct m_inode * inode,int mask)
  *
  * NOTE! unlike strncmp, match returns 1 for success, 0 for failure.
  */
+//// 指定长度字符串比较函数。 
+ // 参数：len - 比较的字符串长度；name - 文件名指针；de - 目录项结构。 
+ // 返回：相同返回 1，不同返回 0。
 static int match(int len,const char * name,struct dir_entry * de)
 {
 	register int same __asm__("ax");
@@ -88,8 +91,11 @@ static int match(int len,const char * name,struct dir_entry * de)
  * This also takes care of the few special cases due to '..'-traversal
  * over a pseudo-root and a mount point.
  */
+//// 查找指定目录和文件名的目录项。 
+ // 参数：dir - 指定目录 i 节点的指针；name - 文件名；namelen - 文件名长度； 
+ // 返回：高速缓冲区指针；res_dir - 返回的目录项结构指针；
 static struct buffer_head * find_entry(struct m_inode ** dir,
-	const char * name, int namelen, struct dir_entry ** res_dir)
+	const char * name, int namelen, struct dir_entry ** res_dir)          // 寻找当前文件夹下的某个子文件夹
 {
 	int entries;
 	int block,i;
@@ -104,12 +110,12 @@ static struct buffer_head * find_entry(struct m_inode ** dir,
 	if (namelen > NAME_LEN)
 		namelen = NAME_LEN;
 #endif
-	entries = (*dir)->i_size / (sizeof (struct dir_entry));
+	entries = (*dir)->i_size / (sizeof (struct dir_entry));   // 计算本目录中目录项项数 entries（当前文件夹下文件个数）
 	*res_dir = NULL;
 	if (!namelen)
 		return NULL;
 /* check for '..', as we might have to do some "magic" for it */
-	if (namelen==2 && get_fs_byte(name)=='.' && get_fs_byte(name+1)=='.') {
+	if (namelen==2 && get_fs_byte(name)=='.' && get_fs_byte(name+1)=='.') {    /* 检查目录项'..'，因为可能需要对其特别处理 */
 /* '..' in a pseudo-root results in a faked '.' (just change namelen) */
 		if ((*dir) == current->root)
 			namelen=1;
@@ -126,8 +132,10 @@ static struct buffer_head * find_entry(struct m_inode ** dir,
 	}
 	if (!(block = (*dir)->i_zone[0]))
 		return NULL;
-	if (!(bh = bread((*dir)->i_dev,block)))
+	if (!(bh = bread((*dir)->i_dev,block)))         // 从节点所在设备读取指定的目录项数据块
 		return NULL;
+	// 在目录项数据块中搜索匹配指定文件名的目录项，首先让 de 指向数据块，并在不超过目录中目录项数 
+    // 的条件下，循环执行搜索。
 	i = 0;
 	de = (struct dir_entry *) bh->b_data;
 	while (i < entries) {
@@ -141,7 +149,7 @@ static struct buffer_head * find_entry(struct m_inode ** dir,
 			}
 			de = (struct dir_entry *) bh->b_data;
 		}
-		if (match(namelen,name,de)) {
+		if (match(namelen,name,de)) {            // 如果找到匹配的目录项的话，则返回该目录项结构指针和该目录项数据块指针
 			*res_dir = de;
 			return bh;
 		}
@@ -225,6 +233,9 @@ static struct buffer_head * add_entry(struct m_inode * dir,
  * Getdir traverses the pathname until it hits the topmost directory.
  * It returns NULL on failure.
  */
+//// 搜寻指定路径名的目录。 
+// 参数：pathname - 路径名。 
+// 返回：目录的 i 节点指针。失败时返回 NULL
 static struct m_inode * get_dir(const char * pathname)
 {
 	char c;
@@ -238,33 +249,37 @@ static struct m_inode * get_dir(const char * pathname)
 		panic("No root inode");
 	if (!current->pwd || !current->pwd->i_count)
 		panic("No cwd inode");
-	if ((c=get_fs_byte(pathname))=='/') {
-		inode = current->root;
+	if ((c=get_fs_byte(pathname))=='/') {       // 取得第一个字符，如果是'/'，则说明路径为绝对路径
+		inode = current->root;    // 根节点开始
 		pathname++;
 	} else if (c)
-		inode = current->pwd;
+		inode = current->pwd;     // 当前目录开始
 	else
 		return NULL;	/* empty name is bad */
-	inode->i_count++;
+	inode->i_count++;    // 将取得的 i 节点引用计数增 1
 	while (1) {
 		thisname = pathname;
 		if (!S_ISDIR(inode->i_mode) || !permission(inode,MAY_EXEC)) {
 			iput(inode);
 			return NULL;
 		}
+		// 从路径名开始起搜索检测字符，直到字符已是结尾符(NULL)或者是'/'，此时 namelen 正好是当前处理 
+		// 目录名的长度。如果最后也是一个目录名，但其后没有加'/'，则不会返回该最后目录的 i 节点！ 
+ 		// 比如：/var/log/httpd，将只返回 log/目录的 i 节点。
 		for(namelen=0;(c=get_fs_byte(pathname++))&&(c!='/');namelen++)
 			/* nothing */ ;
-		if (!c)
+		if (!c)            // 若字符是结尾符 NULL，则表明已经到达指定目录，则返回该 i 节点指针，-----退出/返回----
 			return inode;
-		if (!(bh = find_entry(&inode,thisname,namelen,&de))) {
+		if (!(bh = find_entry(&inode,thisname,namelen,&de))) {   // 寻找子文件夹/子目录项， 放入de
 			iput(inode);
 			return NULL;
 		}
+		// 取该子目录项的 i 节点号 inr 和设备号 idev，释放包含该目录项的高速缓冲块和该 i 节点
 		inr = de->inode;
 		idev = inode->i_dev;
 		brelse(bh);
 		iput(inode);
-		if (!(inode = iget(idev,inr)))
+		if (!(inode = iget(idev,inr)))    // 更新inode，进入子目录;  将dev目录文件的i节点保存在inode_table[32]的指定表项内
 			return NULL;
 	}
 }
@@ -275,6 +290,8 @@ static struct m_inode * get_dir(const char * pathname)
  * dir_namei() returns the inode of the directory of the
  * specified name, and the name within that directory.
  */
+// 参数：pathname - 目录路径名；namelen - 路径名长度。 
+// 返回：指定目录名最顶层目录的 i 节点指针和最顶层目录名及其长度
 static struct m_inode * dir_namei(const char * pathname,
 	int * namelen, const char ** name)
 {
@@ -300,6 +317,9 @@ static struct m_inode * dir_namei(const char * pathname,
  * Open, link etc use their own routines, but this is enough for things
  * like 'chmod' etc.
  */
+//// 取指定路径名的 i 节点。 
+ // 参数：pathname - 路径名。 
+ // 返回：对应的 i 节点。
 struct m_inode * namei(const char * pathname)
 {
 	const char * basename;
@@ -308,7 +328,7 @@ struct m_inode * namei(const char * pathname)
 	struct buffer_head * bh;
 	struct dir_entry * de;
 
-	if (!(dir = dir_namei(pathname,&namelen,&basename)))
+	if (!(dir = dir_namei(pathname,&namelen,&basename)))     // 首先查找指定路径的最顶层目录的目录名及其 i 节点
 		return NULL;
 	if (!namelen)			/* special case: '/usr/' etc */
 		return dir;

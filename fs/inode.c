@@ -147,13 +147,16 @@ int create_block(struct m_inode * inode, int block)
 	return _bmap(inode,block,1);
 }
 		
+//// 释放一个 i 节点(回写入设备)		
 void iput(struct m_inode * inode)
 {
 	if (!inode)
 		return;
-	wait_on_inode(inode);
+	wait_on_inode(inode);         // 等待 inode 节点解锁(如果已上锁的话)
 	if (!inode->i_count)
 		panic("iput: trying to free free inode");
+	// 如果是管道 i 节点，则唤醒等待该管道的进程，引用次数减 1，如果还有引用则返回。否则释放 
+	// 管道占用的内存页面，并复位该节点的引用计数值、已修改标志和管道标志，并返回
 	if (inode->i_pipe) {
 		wake_up(&inode->i_wait);
 		if (--inode->i_count)
@@ -173,16 +176,16 @@ void iput(struct m_inode * inode)
 		wait_on_inode(inode);
 	}
 repeat:
-	if (inode->i_count>1) {
+	if (inode->i_count>1) {      // 引用计数递减
 		inode->i_count--;
 		return;
 	}
-	if (!inode->i_nlinks) {
+	if (!inode->i_nlinks) {      // 链接释放
 		truncate(inode);
 		free_inode(inode);
 		return;
 	}
-	if (inode->i_dirt) {
+	if (inode->i_dirt) {         // 如果该 i 节点已作过修改，则更新该 i 节点，并等待该 i 节点解锁
 		write_inode(inode);	/* we can sleep - so do again */
 		wait_on_inode(inode);
 		goto repeat;
@@ -241,6 +244,8 @@ struct m_inode * get_pipe_inode(void)
 	return inode;
 }
 
+//// 从设备上读取指定节点号的 i 节点。 
+ // nr - i 节点号。
 struct m_inode * iget(int dev,int nr)
 {
 	struct m_inode * inode, * empty;
@@ -291,6 +296,7 @@ struct m_inode * iget(int dev,int nr)
 	return inode;
 }
 
+//// 从设备上读取指定 i 节点的信息到内存中
 static void read_inode(struct m_inode * inode)
 {
 	struct super_block * sb;

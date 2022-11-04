@@ -280,7 +280,9 @@ repeat:
 	return bh;
 }
 
-void brelse(struct buffer_head * buf)
+//// 释放指定的缓冲区。 
+ // 等待该缓冲区解锁。引用计数递减 1。唤醒等待空闲缓冲区的进程
+void brelse(struct buffer_head * buf)     // 缓冲区占用释放，但是内部数据还在
 {
 	if (!buf)
 		return;

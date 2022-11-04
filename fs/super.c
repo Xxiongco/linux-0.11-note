@@ -206,20 +206,22 @@ int sys_umount(char * dev_name)
 	return 0;
 }
 
+//// 安装文件系统调用函数。 
+ // 参数 dev_name 是设备文件名，dir_name 是安装到的目录名，rw_flag 被安装文件的读写标志
 int sys_mount(char * dev_name, char * dir_name, int rw_flag)
 {
 	struct m_inode * dev_i, * dir_i;
 	struct super_block * sb;
 	int dev;
 
-	if (!(dev_i=namei(dev_name)))
+	if (!(dev_i=namei(dev_name)))             // 首先根据设备文件名找到对应的 i 节点，并取其中的设备号
 		return -ENOENT;
-	dev = dev_i->i_zone[0];
+	dev = dev_i->i_zone[0];                   // 通过i节点，获取设备号
 	if (!S_ISBLK(dev_i->i_mode)) {
 		iput(dev_i);
 		return -EPERM;
 	}
-	iput(dev_i);
+	iput(dev_i);                              // 释放刚申请的 i 节点 dev_i
 	if (!(dir_i=namei(dir_name)))
 		return -ENOENT;
 	if (dir_i->i_count != 1 || dir_i->i_num == ROOT_INO) {
@@ -230,7 +232,7 @@ int sys_mount(char * dev_name, char * dir_name, int rw_flag)
 		iput(dir_i);
 		return -EPERM;
 	}
-	if (!(sb=read_super(dev))) {
+	if (!(sb=read_super(dev))) {               // 通过设备号，读取设备的超级块
 		iput(dir_i);
 		return -EBUSY;
 	}
@@ -242,10 +244,10 @@ int sys_mount(char * dev_name, char * dir_name, int rw_flag)
 		iput(dir_i);
 		return -EPERM;
 	}
-	sb->s_imount=dir_i;
-	dir_i->i_mount=1;
+	sb->s_imount=dir_i;             // 被安装设备挂载到目录设备节点
+	dir_i->i_mount=1;               // 已挂载，已修改
 	dir_i->i_dirt=1;		/* NOTE! we don't iput(dir_i) */
-	return 0;			/* we do that in umount */
+	return 0;			/* we do that in umount 在umount 中释放 */
 }
 
 // 加载根文件系统  统开机初始化设置时(sys_setup())调用的

@@ -51,6 +51,7 @@ void do_rd_request(void)
  * Returns amount of memory which needs to be reserved.
  */
 /* 返回内存虚拟盘 ramdisk 所需的内存量 */
+// 格式化虚拟盘
 long rd_init(long mem_start, int length)
 {
 	int	i;
@@ -128,5 +129,5 @@ void rd_load(void)
 		i++;
 	}
 	printk("\010\010\010\010\010done \n");
-	ROOT_DEV=0x0101;                            // 修改 ROOT_DEV 使其指向虚拟盘 ramdisk
+	ROOT_DEV=0x0101;                            // 修改 ROOT_DEV 使其指向虚拟盘 ramdisk，设置虚拟盘为根设备
 }
