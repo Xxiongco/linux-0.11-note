@@ -1,5 +1,6 @@
 #ifndef _CTYPE_H
 #define _CTYPE_H
+// 字符串类型
 
 #define _U	0x01	/* upper */
 #define _L	0x02	/* lower */

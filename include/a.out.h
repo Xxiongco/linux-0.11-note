@@ -1,8 +1,20 @@
 #ifndef _A_OUT_H
 #define _A_OUT_H
+// a.out格式
 
 #define __GNU_EXEC_MACROS__
 
+// 执行文件结构。 
+ // ============================= 
+ // unsigned long a_magic // 执行文件魔数。使用 N_MAGIC 等宏访问。 
+ // unsigned a_text // 代码长度，字节数。 
+ // unsigned a_data // 数据长度，字节数。 
+ // unsigned a_bss // 文件中的未初始化数据区长度，字节数。 
+ // unsigned a_syms // 文件中的符号表长度，字节数。 
+ // unsigned a_entry // 执行开始地址。 
+ // unsigned a_trsize // 代码重定位信息长度，字节数。 文件被其他文件连接或者引用时需要修改的值
+ // unsigned a_drsize // 数据重定位信息长度，字节数。 
+ // -----------------------------
 struct exec {
   unsigned long a_magic;	/* Use macros N_MAGIC, etc for access */
   unsigned a_text;		/* length of text, in bytes */
@@ -189,7 +201,7 @@ struct nlist {
    The text-relocation section of the file is a vector of these structures,
    all of which apply to the text section.
    Likewise, the data-relocation section applies to the data section.  */
-
+// 重定位信息结构
 struct relocation_info
 {
   /* Address (within segment) to be relocated.  */
