@@ -1,6 +1,8 @@
 #ifndef _STRING_H_
 #define _STRING_H_
 
+// 该头文件中以内嵌函数的形式定义了所有字符串操作函数，为了提高执行速度使用了内嵌汇编程序
+
 #ifndef NULL
 #define NULL ((void *) 0)
 #endif
@@ -24,6 +26,9 @@ extern char * strerror(int errno);
  *		(C) 1991 Linus Torvalds
  */
  
+ //// 将一个字符串(src)拷贝到另一个字符串(dest)，直到遇到 NULL 字符后停止。 
+ // 参数：dest - 目的字符串指针，src - 源字符串指针。 
+ // %0 - esi(src)，%1 - edi(dest)。
 extern inline char * strcpy(char * dest,const char *src)
 {
 __asm__("cld\n"
@@ -35,6 +40,10 @@ __asm__("cld\n"
 return dest;
 }
 
+//// 拷贝源字符串 count 个字节到目的字符串。 
+ // 如果源串长度小于 count 个字节，就附加空字符(NULL)到目的字符串。 
+ // 参数：dest - 目的字符串指针，src - 源字符串指针，count - 拷贝字节数。 
+ // %0 - esi(src)，%1 - edi(dest)，%2 - ecx(count)
 extern inline char * strncpy(char * dest,const char *src,int count)
 {
 __asm__("cld\n"
@@ -51,6 +60,9 @@ __asm__("cld\n"
 return dest;
 }
 
+//// 将源字符串拷贝到目的字符串的末尾处。 
+ // 参数：dest - 目的字符串指针，src - 源字符串指针。 
+ // %0 - esi(src)，%1 - edi(dest)，%2 - eax(0)，%3 - ecx(-1)
 extern inline char * strcat(char * dest,const char * src)
 {
 __asm__("cld\n\t"
@@ -65,6 +77,9 @@ __asm__("cld\n\t"
 return dest;
 }
 
+//// 将源字符串的 count 个字节复制到目的字符串的末尾处，最后添一空字符。 
+ // 参数：dest - 目的字符串，src - 源字符串，count - 欲复制的字节数。 
+ // %0 - esi(src)，%1 - edi(dest)，%2 - eax(0)，%3 - ecx(-1)，%4 - (count)
 extern inline char * strncat(char * dest,const char * src,int count)
 {
 __asm__("cld\n\t"
@@ -85,6 +100,10 @@ __asm__("cld\n\t"
 return dest;
 }
 
+//// 将一个字符串与另一个字符串进行比较。 
+ // 参数：cs - 字符串 1，ct - 字符串 2。 
+ // %0 - eax(__res)返回值，%1 - edi(cs)字符串 1 指针，%2 - esi(ct)字符串 2 指针。 
+ // 返回：如果串 1 > 串 2，则返回 1；串 1 = 串 2，则返回 0；串 1 < 串 2，则返回-1
 extern inline int strcmp(const char * cs,const char * ct)
 {
 register int __res __asm__("ax");
@@ -104,6 +123,10 @@ __asm__("cld\n"
 return __res;
 }
 
+//// 字符串 1 与字符串 2 的前 count 个字符进行比较。 
+ // 参数：cs - 字符串 1，ct - 字符串 2，count - 比较的字符数。 
+ // %0 - eax(__res)返回值，%1 - edi(cs)串 1 指针，%2 - esi(ct)串 2 指针，%3 - ecx(count)。 
+ // 返回：如果串 1 > 串 2，则返回 1；串 1 = 串 2，则返回 0；串 1 < 串 2，则返回-1
 extern inline int strncmp(const char * cs,const char * ct,int count)
 {
 register int __res __asm__("ax");
@@ -144,6 +167,10 @@ __asm__("cld\n\t"
 return __res;
 }
 
+//// 寻找字符串中指定字符最后一次出现的地方。（反向搜索字符串） 
+ // 参数：s - 字符串，c - 欲寻找的字符。 
+ // %0 - edx(__res)，%1 - edx(0)，%2 - esi(字符串指针 s)，%3 - eax(字符 c)。 
+ // 返回：返回字符串中最后一次出现匹配字符的指针。若没有找到匹配的字符，则返回空指针
 extern inline char * strrchr(const char * s,char c)
 {
 register char * __res __asm__("dx");
@@ -160,6 +187,8 @@ __asm__("cld\n\t"
 return __res;
 }
 
+// cs中第一个不在ct中出现的字符下标
+// strspn("ABCDEFG019874", "ABCD") => 4    前向匹配字数
 extern inline int strspn(const char * cs, const char * ct)
 {
 register char * __res __asm__("si");
@@ -184,6 +213,8 @@ __asm__("cld\n\t"
 return __res-cs;
 }
 
+// 检索字符串 str1 开头连续有几个字符都不含字符串 str2 中的字符
+// strspn("ABCDEF4960910", "013") => 9     前向不匹配字数
 extern inline int strcspn(const char * cs, const char * ct)
 {
 register char * __res __asm__("si");
@@ -208,6 +239,8 @@ __asm__("cld\n\t"
 return __res-cs;
 }
 
+// 首个匹配字符
+// strpbrk("abcde2fghi3jk4l", "34") = '3'
 extern inline char * strpbrk(const char * cs,const char * ct)
 {
 register char * __res __asm__("si");
@@ -236,6 +269,7 @@ return __res;
 }
 
 // 在字符串 1 中寻找首个匹配整个字符串 2 的字符串
+// strstr("RUNOOB", "NO") => "NOOB"
 extern inline char * strstr(const char * cs,const char * ct)
 {
 register char * __res __asm__("ax");
@@ -263,6 +297,7 @@ __asm__("cld\n\t" \
 return __res;
 }
 
+// 计算字符串长度
 extern inline int strlen(const char * s)
 {
 register int __res __asm__("cx");
@@ -277,6 +312,7 @@ return __res;
 
 extern char * ___strtok;
 
+// 字符串s按照 ct 进行分割
 // #include <string.h>
 // main(){
 //     char s[] = "ab-cd : ef;gh :i-jkl;mnop;qrs-tu: vwx-y;z";
@@ -348,6 +384,7 @@ __asm__("testl %1,%1\n\t"
 return __res;
 }
 
+//// 内存块复制。从源地址 src 处开始复制 n 个字节到目的地址 dest 处
 extern inline void * memcpy(void * dest,const void * src, int n)
 {
 __asm__("cld\n\t"
@@ -358,6 +395,7 @@ __asm__("cld\n\t"
 return dest;
 }
 
+//// 内存块移动。同内存块复制，但考虑移动的方向
 // char str[] = "memmove can be very useful......";
 // memmove (str+20,str+15,11);
 // 运行结果：
@@ -379,6 +417,7 @@ __asm__("std\n\t"
 return dest;
 }
 
+//// 比较 n 个字节的两块内存（两个字符串），即使遇上 NULL 字节也不停止比较
 extern inline int memcmp(const void * cs,const void * ct,int count)
 {
 register int __res __asm__("ax");
@@ -395,6 +434,7 @@ __asm__("cld\n\t"
 return __res;
 }
 
+//// 在 n 字节大小的内存块(字符串)中寻找指定字符
 extern inline void * memchr(const void * cs,char c,int count)
 {
 register void * __res __asm__("di");
@@ -411,6 +451,8 @@ __asm__("cld\n\t"
 return __res;
 }
 
+//// 用字符填写指定长度内存块。 
+ // 用字符 c 填写 s 指向的内存区域，共填 count 字节。
 extern inline void * memset(void * s,char c,int count)
 {
 __asm__("cld\n\t"
