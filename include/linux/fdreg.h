@@ -5,6 +5,8 @@
  */
 #ifndef _FDREG_H
 #define _FDREG_H
+// 软盘系统常用到的一些参数以及所使用的 I/O 端口   floppy disk register
+
 
 extern int ticks_to_floppy_on(unsigned int nr);
 extern void floppy_on(unsigned int nr);

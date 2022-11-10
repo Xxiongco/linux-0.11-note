@@ -3,6 +3,10 @@
  * Various sources. Check out some definitions (see comments with
  * a ques).
  */
+/* 
+ * 本文件含有一些 AT 硬盘控制器的定义。来自各种资料。请查证某些 
+ * 定义（带有问号的注释）。 
+ */
 #ifndef _HDREG_H
 #define _HDREG_H
 

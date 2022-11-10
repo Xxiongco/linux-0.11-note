@@ -2,6 +2,9 @@
  * This file has definitions for some important file table
  * structures etc.
  */
+/* 
+ * 本文件含有某些重要文件表结构的定义等。 
+ */
 
 #ifndef _FS_H
 #define _FS_H
@@ -40,11 +43,11 @@ void buffer_init(long buffer_end);
 #define Z_MAP_SLOTS 8                     // 逻辑块（区段块）位图槽数
 #define SUPER_MAGIC 0x137F                // 文件系统魔数
 
-#define NR_OPEN 20                        // 打开文件数
-#define NR_INODE 32
-#define NR_FILE 64
-#define NR_SUPER 8
-#define NR_HASH 307
+#define NR_OPEN 20                        // 单个进程打开文件数(文件描述符)， 用于filp
+#define NR_INODE 32						  // 系统节点数, 用于 inode_table	
+#define NR_FILE 64						  // 系统打开文件数，用于 file_table	
+#define NR_SUPER 8					      // 系统超级块挂载数
+#define NR_HASH 307                       // 缓冲区hash表大小
 #define NR_BUFFERS nr_buffers
 #define BLOCK_SIZE 1024                   // 数据块长度
 #define BLOCK_SIZE_BITS 10                // 数据块长度所占比特位数
@@ -66,6 +69,8 @@ __asm__("incl %0\n\tandl $4095,%0"::"m" (head))
 
 typedef char buffer_block[BLOCK_SIZE];             // 块缓冲区
 
+// 缓冲区头数据结构。（极为重要！！！） 
+ // 在程序中常用 bh 来表示 buffer_head 类型的缩写
 struct buffer_head {
 	char * b_data;			/* pointer to data block (1024 bytes) 数据块 */
 	unsigned long b_blocknr;	/* block number 块号 */
@@ -75,21 +80,21 @@ struct buffer_head {
 	unsigned char b_count;		/* users using this block */  //使用的用户数, reference count? 
 	unsigned char b_lock;		/* 0 - ok, 1 -locked */
 	struct task_struct * b_wait;          // 指向等待该缓冲区解锁的任务
-	struct buffer_head * b_prev;
-	struct buffer_head * b_next;
-	struct buffer_head * b_prev_free;
-	struct buffer_head * b_next_free;
+	struct buffer_head * b_prev;		// 前一块（这四个指针用于缓冲区的管理）
+	struct buffer_head * b_next;		// 下一块
+	struct buffer_head * b_prev_free;	// 前一空闲块
+	struct buffer_head * b_next_free;	// 下一空闲块
 };
 
 // 磁盘上的索引节点(i 节点)数据结构   32B
 struct d_inode {
 	unsigned short i_mode;   // 文件类型和属性(rwx 位)
 	unsigned short i_uid;    // 用户 id（文件拥有者标识符）
-	unsigned long i_size;
-	unsigned long i_time;
-	unsigned char i_gid; 
+	unsigned long i_size;	// 文件大小（字节数）
+	unsigned long i_time;	// 修改时间（自 1970.1.1:0 算起，秒）
+	unsigned char i_gid; 	// 组 id(文件拥有者所在的组)
 	unsigned char i_nlinks;     // 链接数（多少个文件目录项指向该 i 节点）
-	unsigned short i_zone[9];   // 直接(0-6)、间接(7)或双重间接(8)逻辑块号。 zone 是区的意思，可译成区段，或逻辑块
+	unsigned short i_zone[9];   // 直接(0-6)、间接(7)或双重间接(8)逻辑块号。 zone 是区的意思，可译成区段，或逻辑块。  指向数据块
 };
 
 // 这是在内存中的 i 节点结构。前 7 项与 d_inode 完全一样
@@ -108,12 +113,12 @@ struct m_inode {
 	unsigned short i_dev;          //存储该文件所在的设备，dev_t中包括主设备号和次设备号
 	unsigned short i_num;          // i 节点号
 	unsigned short i_count;        // i 节点被使用的次数，0 表示该 i 节点空闲
-	unsigned char i_lock;
-	unsigned char i_dirt;
-	unsigned char i_pipe;
+	unsigned char i_lock;			// 锁定标志
+	unsigned char i_dirt;			// 已修改(脏)标志
+	unsigned char i_pipe;			// 管道标志
 	unsigned char i_mount;         // 安装标志（挂载标志）
 	unsigned char i_seek;          // 搜寻标志（用于lseek）
-	unsigned char i_update;
+	unsigned char i_update;			// 更新标志
 };
 
 struct file { 
@@ -164,18 +169,22 @@ struct dir_entry {
 	char name[NAME_LEN];           // 文件名
 };
 
-extern struct m_inode inode_table[NR_INODE];          // 定义 i 节点表数组（32 项）？？
+extern struct m_inode inode_table[NR_INODE];          // 定义 i 节点表数组（32 项）
 extern struct file file_table[NR_FILE];               // 文件表数组（64 项）
 extern struct super_block super_block[NR_SUPER];      // 超级块数组（8 项）
 extern struct buffer_head * start_buffer;             // 缓冲区起始内存位置
-extern int nr_buffers;                                // 缓冲块数
+extern int nr_buffers;                                // 缓冲块数 3000左右
 
 //// 磁盘操作函数原型。 
  // 检测驱动器中软盘是否改变
 extern void check_disk_change(int dev);
+// 检测指定软驱中软盘更换情况
 extern int floppy_change(unsigned int nr);
+// 设置启动指定驱动器所需等待的时间
 extern int ticks_to_floppy_on(unsigned int dev);
+// 启动指定驱动器。
 extern void floppy_on(unsigned int dev);
+// 关闭指定的软盘驱动器
 extern void floppy_off(unsigned int dev);
 
 

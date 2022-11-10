@@ -6,13 +6,16 @@
  * offsets into 'tty_queue'
  */
 
+// teletype缩写，是由虚拟控制台、串口以及伪终端设备组成的终端设备
+
 #ifndef _TTY_H
 #define _TTY_H
 
 #include <termios.h>
 
-#define TTY_BUF_SIZE 1024
+#define TTY_BUF_SIZE 1024		// tty 缓冲区大小
 
+// tty 等待队列数据结构
 struct tty_queue {
 	unsigned long data;
 	unsigned long head;
@@ -52,7 +55,7 @@ struct tty_struct {
 	struct tty_queue secondary;               // tty 辅助队列(存放规范模式字符序列)
 	};
 
-extern struct tty_struct tty_table[];
+extern struct tty_struct tty_table[];		// tty 结构数组
 
 /*	intr=^C		quit=^|		erase=del	kill=^U
 	eof=^D		vtime=\0	vmin=\1		sxtc=\0
@@ -69,8 +72,11 @@ extern struct tty_struct tty_table[];
  // 控制字符对应的 ASCII 码值。[8 进制]
 #define INIT_C_CC "\003\034\177\025\004\0\1\0\021\023\032\0\022\017\027\026\0"
 
+// 异步串行通信初始化	serial
 void rs_init(void);
+// 控制终端初始化	console
 void con_init(void);
+// tty 初始化
 void tty_init(void);
 
 int tty_read(unsigned c, char * buf, int n);
@@ -79,6 +85,7 @@ int tty_write(unsigned c, char * buf, int n);
 void rs_write(struct tty_struct * tty);
 void con_write(struct tty_struct * tty);
 
+// 复制成规范模式字符序列
 void copy_to_cooked(struct tty_struct * tty);
 
 #endif
