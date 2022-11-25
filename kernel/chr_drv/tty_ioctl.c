@@ -3,7 +3,7 @@
  *
  *  (C) 1991  Linus Torvalds
  */
-
+// 控制tty设备参数相关
 #include <errno.h>
 #include <termios.h>
 
@@ -22,6 +22,7 @@ static unsigned short quotient[] = {
 	64, 48, 24, 12, 6, 3
 };
 
+// 修改传输速率
 static void change_speed(struct tty_struct * tty)
 {
 	unsigned short port,quot;
@@ -55,6 +56,13 @@ static void send_break(struct tty_struct * tty)
 	/* do nothing - not implemented */
 }
 
+/**
+ * @brief 从tty中得到状态信息, 复制到termios中
+ * 
+ * @param tty 指定终端的 tty 结构指针
+ * @param termios 用户数据区 termios 结构缓冲区指针
+ * @return int 返回0
+ */
 static int get_termios(struct tty_struct * tty, struct termios * termios)
 {
 	int i;
@@ -66,6 +74,13 @@ static int get_termios(struct tty_struct * tty, struct termios * termios)
 	return 0;
 }
 
+/**
+ * @brief 使用指定的termios设置tty
+ * 
+ * @param tty 目的终端
+ * @param termios 源数据结构
+ * @return int 返回0
+ */
 static int set_termios(struct tty_struct * tty, struct termios * termios)
 {
 	int i;
@@ -77,6 +92,13 @@ static int set_termios(struct tty_struct * tty, struct termios * termios)
 	return 0;
 }
 
+/**
+ * @brief 读取tty中的信息到termio
+ * 
+ * @param tty 
+ * @param termio 
+ * @return int 
+ */
 static int get_termio(struct tty_struct * tty, struct termio * termio)
 {
 	int i;
@@ -116,8 +138,15 @@ static int set_termio(struct tty_struct * tty, struct termio * termio)
 	return 0;
 }
 
-//// tty 终端设备的 ioctl 函数。 
- // 参数：dev - 设备号；cmd - ioctl 命令；arg - 操作参数指针。
+
+ /**
+  * @brief 对dev设备进行控制
+  * 
+  * @param dev 设备号
+  * @param cmd 命令
+  * @param arg 参数
+  * @return int 0-成功， 其他-错误号
+  */
 int tty_ioctl(int dev, int cmd, int arg)
 {
 	struct tty_struct * tty;
@@ -129,14 +158,13 @@ int tty_ioctl(int dev, int cmd, int arg)
 		dev=MINOR(dev);
 	tty = dev + tty_table;
 	switch (cmd) {
-		case TCGETS:
+		case TCGETS:				// 取termios信息
 			return get_termios(tty,(struct termios *) arg);
-		case TCSETSF:
+		case TCSETSF:				// 清空队列
 			flush(&tty->read_q); /* fallthrough */
-		case TCSETSW:
-		// 在设置终端 termios 的信息之前，需要先等待输出队列中所有数据处理完(耗尽)。
+		case TCSETSW:				// 在设置终端 termios 的信息之前，需要先等待输出队列中所有数据处理完(耗尽)
 			wait_until_sent(tty); /* fallthrough */
-		case TCSETS:
+		case TCSETS:				// 设置termios
 			return set_termios(tty,(struct termios *) arg);
 		case TCGETA:
 			return get_termio(tty,(struct termio *) arg);
@@ -155,6 +183,8 @@ int tty_ioctl(int dev, int cmd, int arg)
 		case TCXONC:
 			return -EINVAL; /* not implemented */
 		case TCFLSH:
+		//刷新已写输出但还没发送或已收但还没有读数据。如果参数是 0，则刷新(清空)输入队列；如果是 1， 
+ 		// 则刷新输出队列；如果是 2，则刷新输入和输出队列。
 			if (arg==0)
 				flush(&tty->read_q);
 			else if (arg==1)

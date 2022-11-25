@@ -21,9 +21,12 @@ extern void write_verify(unsigned long address);
 
 long last_pid=0;
 
-// 根据当前任务的ldt 按页 设置内存区域，实现方法为write_verify
-// addr： 起始位置
-// size: 偏移量
+/**
+ * @brief 根据当前任务的ldt 按页 设置内存区域，实现方法为write_verify
+ * 
+ * @param addr 起始位置
+ * @param size 偏移量
+ */
 void verify_area(void * addr,int size)
 {
 	unsigned long start;      //4B
@@ -74,7 +77,7 @@ int copy_mem(int nr,struct task_struct * p)
  * OK，下面是主要的 fork 子程序。它复制系统进程信息(task[n])并且设置必要的寄存器。 
  * 它还整个地复制数据段。 
  */ 
- // 复制进程。
+ // 复制进程。  复制task_struct（包含tss和ldt等），复制寄存器，复制内存；再进行一些个性化设置（如各种id，状态等）
 int copy_process(int nr,long ebp,long edi,long esi,long gs,long none,
 		long ebx,long ecx,long edx,
 		long fs,long es,long ds,

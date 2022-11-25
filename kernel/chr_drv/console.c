@@ -15,6 +15,15 @@
  * Beeping thanks to John T Kohl.
  */
 
+/* 
+ * 该模块实现控制台输入输出功能 
+ * 'void con_init(void)' 
+ * 'void con_write(struct tty_queue * queue)' 
+ * 希望这是一个非常完整的 VT102 实现。 
+ * 
+ * 感谢 John T Kohl 实现了蜂鸣指示。 
+ */
+
 /*
  *  NOTE!!! We sometimes disable and enable interrupts for a short while
  * (to put a word in video IO), but this will work even for keyboard
@@ -36,15 +45,15 @@
  * These are set up by the setup-routine at boot-time:
  */
 
-#define ORIG_X			(*(unsigned char *)0x90000)     // 光标列号。
-#define ORIG_Y			(*(unsigned char *)0x90001)     // 光标行号。
-#define ORIG_VIDEO_PAGE		(*(unsigned short *)0x90004)       // 显示页面
-#define ORIG_VIDEO_MODE		((*(unsigned short *)0x90006) & 0xff)    // 显示模式。
-#define ORIG_VIDEO_COLS 	(((*(unsigned short *)0x90006) & 0xff00) >> 8)     // 字符列数。
-#define ORIG_VIDEO_LINES	(25)                                              // 显示行数。
+#define ORIG_X			(*(unsigned char *)0x90000)     					// 光标列号。
+#define ORIG_Y			(*(unsigned char *)0x90001)     					// 光标行号。
+#define ORIG_VIDEO_PAGE		(*(unsigned short *)0x90004)       				// 显示页面
+#define ORIG_VIDEO_MODE		((*(unsigned short *)0x90006) & 0xff)    		// 显示模式。
+#define ORIG_VIDEO_COLS 	(((*(unsigned short *)0x90006) & 0xff00) >> 8)  // 字符列数。
+#define ORIG_VIDEO_LINES	(25)                                            // 显示行数。
 #define ORIG_VIDEO_EGA_AX	(*(unsigned short *)0x90008)                  
-#define ORIG_VIDEO_EGA_BX	(*(unsigned short *)0x9000a)    // 显示内存大小和色彩模式
-#define ORIG_VIDEO_EGA_CX	(*(unsigned short *)0x9000c)    // 显示卡特性参数
+#define ORIG_VIDEO_EGA_BX	(*(unsigned short *)0x9000a)    				// 显示内存大小和色彩模式
+#define ORIG_VIDEO_EGA_CX	(*(unsigned short *)0x9000c)    				// 显示卡特性参数
 
 #define VIDEO_TYPE_MDA		0x10	/* Monochrome Text Display	*/   /* 单色文本 */
 #define VIDEO_TYPE_CGA		0x11	/* CGA Display 			*/  /* CGA 显示器 */

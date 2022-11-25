@@ -10,6 +10,10 @@
  * call functions (type getpid(), which just extracts a field from
  * current-task
  */
+/* 
+ * 'sched.c'是主要的内核文件。其中包括有关调度的基本函数(sleep_on、wakeup、schedule 等)以及 
+ * 一些简单的系统调用函数（比如 getpid()，仅从当前任务中获取一个字段）。 
+ */
 #include <linux/sched.h>
 #include <linux/kernel.h>
 #include <linux/sys.h>
@@ -22,15 +26,22 @@
 
 //  取信号 nr 在信号位图中对应位的二进制数值。信号编号 1-32    比如信号 5 的位图数值 = 1<<(5-1) = 16 = 00010000b
 #define _S(nr) (1<<((nr)-1))
+// 除了SIGKILL和SIGSTOP之外其他都是可阻塞的信号(…10111111111011111111b)
 #define _BLOCKABLE (~(_S(SIGKILL) | _S(SIGSTOP)))
 
+/**
+ * @brief 显示任务号nr的进程号、进程状态和内核堆栈空闲字节数（内核堆栈大小为4k，用task_union存储）
+ * 
+ * @param nr 任务号
+ * @param p 任务结构体
+ */
 void show_task(int nr,struct task_struct * p)
 {
 	int i,j = 4096-sizeof(struct task_struct);
 
 	printk("%d: pid=%d, state=%d, ",nr,p->pid,p->state);
 	i=0;
-	while (i<j && !((char *)(p+1))[i])
+	while (i<j && !((char *)(p+1))[i])	// 检测指定任务数据结构以后等于 0 的字节数
 		i++;
 	printk("%d (of %d) chars free in kernel stack\n\r",i,j);
 }
@@ -53,26 +64,28 @@ extern void mem_use(void);
 extern int timer_interrupt(void);
 extern int system_call(void);
 
+// 任务联合，包括任务结构体和内核堆栈
 union task_union {
 	struct task_struct task;
 	char stack[PAGE_SIZE];
 };
 
+// 定义初始任务的数据(sched.h 中) 非常重要！！！！
 static union task_union init_task = {INIT_TASK,};
 
-long volatile jiffies=0;
+long volatile jiffies=0;		// 滴答数
 long startup_time=0;                       // 开机时间。从 1970-1-1，0:0:0 开始计时的秒数
-struct task_struct *current = &(init_task.task);
+struct task_struct *current = &(init_task.task);		// 当前任务指针
 struct task_struct *last_task_used_math = NULL;      // 使用过协处理器任务的指针
 
-struct task_struct * task[NR_TASKS] = {&(init_task.task), };
+struct task_struct * task[NR_TASKS] = {&(init_task.task), };	// 最多64个任务
 
 long user_stack [ PAGE_SIZE>>2 ] ;    //定义用户堆栈数组（1024 项）
 
 struct {                             // 堆栈开始结构（地址指针，数据段选择符）
 	long * a;
 	short b;
-	} stack_start = { & user_stack [PAGE_SIZE>>2] , 0x10 };
+	} stack_start = { & user_stack [PAGE_SIZE>>2] , 0x10 };		// 洪湖堆栈从最高地址开始
 /*
  *  'math_state_restore()' saves the current math information in the
  * old math state array, and gets the new ones from the current task
@@ -103,6 +116,7 @@ void math_state_restore()
  *   NOTE!!  Task 0 is the 'idle' task, which gets called when no other
  * tasks can run. It can not be killed, and it cannot sleep. The 'state'
  * information in task[0] is never used.
+ * 进程调度
  */
 void schedule(void)
 {
@@ -110,7 +124,7 @@ void schedule(void)
 	struct task_struct ** p;
 
 /* check alarm, wake up any interruptible tasks that have got a signal */
-
+// ========== 根据信号唤醒进程 ===========
 	for(p = &LAST_TASK ; p > &FIRST_TASK ; --p)
 		if (*p) {                  // 如果任务的 alarm 时间已经过期(alarm<jiffies),在信号位图中置 SIGALRM 信号，然后清 alarm
 			if ((*p)->alarm && (*p)->alarm < jiffies) {
@@ -144,6 +158,7 @@ void schedule(void)
 	switch_to(next);
 }
 
+// pause()系统调用。转换当前任务的状态为可中断的等待状态，并重新调度。
 int sys_pause(void)
 {
 	current->state = TASK_INTERRUPTIBLE;
@@ -151,7 +166,7 @@ int sys_pause(void)
 	return 0;
 }
 
-// 将当前任务置为不可中断的等待状态, 只有明确地唤醒时才会返回
+// 将当前任务置为不可中断的等待状态,并让睡眠对象的任务指针指向当前任务，只有明确地唤醒时才会返回
 void sleep_on(struct task_struct **p)
 {
 	struct task_struct *tmp;
@@ -168,7 +183,7 @@ void sleep_on(struct task_struct **p)
 		tmp->state=0;
 }
 
-// 将当前任务置为可中断的等待状态
+// 将当前任务置为可中断的等待状态，等待指定（*p）任务的完成
 void interruptible_sleep_on(struct task_struct **p)
 {
 	struct task_struct *tmp;
@@ -195,7 +210,7 @@ void wake_up(struct task_struct **p)
 {
 	if (p && *p) {
 		(**p).state=0;
-		*p=NULL;                //?????????????  相当于释放指针, for floppy
+		*p=NULL;                //?????????????  相当于释放指针
 	}
 }
 
@@ -269,13 +284,14 @@ void do_floppy_timer(void)
 
 #define TIME_REQUESTS 64   // 最多可有 64 个定时器链表（64 个任务）
 
+// 定时器链表结构和定时器数组
 static struct timer_list {
-	long jiffies;                 // 定时滴答数
-	void (*fn)();
-	struct timer_list * next;
+	long jiffies;                   // 定时滴答数
+	void (*fn)();					// 定时器处理程序
+	struct timer_list * next;		// 下一个定时器
 } timer_list[TIME_REQUESTS], * next_timer = NULL;
 
-//
+// 添加定时器。输入参数为指定的定时值(滴答数)和相应的处理程序指针
 void add_timer(long jiffies, void (*fn)(void))
 {
 	struct timer_list * p;
@@ -309,7 +325,9 @@ void add_timer(long jiffies, void (*fn)(void))
 	sti();
 }
 
-// 时钟中断 C 函数处理程序
+// 时钟中断 C 函数处理程序，
+// 每个时钟中断都要更新首个任务的定时器，
+// 然后进行相应的定时器处理程序，然后进行任务调度
 void do_timer(long cpl)      //current priority level
 {
 	extern int beepcount;            // 扬声器发声时间滴答数
@@ -324,6 +342,8 @@ void do_timer(long cpl)      //current priority level
 	else
 		current->stime++;
 
+// 如果有用户的定时器存在，则将链表第 1 个定时器的值减 1。如果已等于 0，则调用相应的处理 
+ // 程序，并将该处理程序指针置为空。然后去掉该项定时器
 	if (next_timer) {
 		next_timer->jiffies--;
 		while (next_timer && next_timer->jiffies <= 0) {
@@ -337,12 +357,14 @@ void do_timer(long cpl)      //current priority level
 	}
 	if (current_DOR & 0xf0)
 		do_floppy_timer();
-	if ((--current->counter)>0) return;   // 当前线程还有剩余时间片，直接返回
+	if ((--current->counter)>0) return;      // 当前线程还有剩余时间片，直接返回
 	current->counter=0;
-	if (!cpl) return;
-	schedule();                            // 若没有剩余时间片，调度
+	if (!cpl) return;						 // 对于超级用户程序，不依赖 counter 值进行调度
+	schedule();                              
 }
 
+// 系统调用功能 - 设置报警定时时间值(秒)。 
+ // 如果已经设置过 alarm 值，则返回旧值，否则返回 0
 int sys_alarm(long seconds)
 {
 	int old = current->alarm;
@@ -353,37 +375,44 @@ int sys_alarm(long seconds)
 	return (old);
 }
 
+// 取当前进程号 pid
 int sys_getpid(void)
 {
 	return current->pid;
 }
 
+// 取父进程号ppid
 int sys_getppid(void)
 {
 	return current->father;
 }
 
+// 取用户号uid
 int sys_getuid(void)
 {
 	return current->uid;
 }
 
+// 取euid
 int sys_geteuid(void)
 {
 	return current->euid;
 }
 
+// 取组号 gid。
 int sys_getgid(void)
 {
 	return current->gid;
 }
 
+// 取 egid。
 int sys_getegid(void)
 {
 	return current->egid;
 }
 
 // 系统调用功能 -- 降低对 CPU 的使用优先权
+// 应该限制 increment 大于 0，否则的话,可使优先权增大！！
 int sys_nice(long increment)
 {
 	if (current->priority-increment>0)

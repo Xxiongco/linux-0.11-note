@@ -65,11 +65,11 @@ void reserved(void);
 void parallel_interrupt(void);
 void irq13(void);
 
-// 该子程序用来打印出错中断的名称、出错号、调用程序的 EIP、EFLAGS、ESP、fs 段寄存器值、 
- // 段的基址、段的长度、进程号 pid、任务号、10 字节指令码。如果堆栈在用户数据段，则还 
- // 打印 16 字节的堆栈内容                     display segment exception
+
  /**
-  * @brief 
+  * @brief 该子程序用来打印出错中断的名称、出错号、调用程序的 EIP、EFLAGS、ESP、fs 段寄存器值、
+  * 段的基址、段的长度、进程号 pid、任务号、10 字节指令码。如果堆栈在用户数据段，则还   
+  * 打印 16 字节的堆栈内容                     display segment exception
   * 
   * @param str           提示字符串
   * @param esp_ptr 		 ESP（Extended Stack Pointer）为扩展栈指针寄存器,存放函数栈顶指针;EBP（Extended Base Pointer）用于存放函数栈底指针

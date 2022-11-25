@@ -57,3 +57,8 @@ long kernel_mktime(struct tm * tm)
 	res += tm->tm_sec;
 	return res;
 }
+
+
+// 闰年的基本计算方法是： 
+// 如果 y 能被 4 除尽且不能被 100 除尽，或者能被 400 除尽，则 y 是闰年。
+// 4闰百不闰，400再闰

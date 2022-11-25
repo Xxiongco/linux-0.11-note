@@ -12,6 +12,13 @@
  *	void rs_init(void);
  * and all interrupts pertaining to serial IO.
  */
+/* 
+ * serial.c 
+ * 该程序用于实现 rs232 的输入输出功能 
+ * void rs_write(struct tty_struct *queue); 
+ * void rs_init(void); 
+ * 以及与传输 IO 有关系的所有中断处理程序。 
+ */
 
 #include <linux/tty.h>
 #include <linux/sched.h>

@@ -5,6 +5,8 @@
  */
 
 /* bitmap.c contains the code that handles the inode and block bitmaps */
+// 该程序主要用于处理 i 节点和逻辑块（磁盘块或区段）的位图
+
 #include <string.h>
 
 #include <linux/sched.h>
@@ -53,7 +55,7 @@ __res;})
 
 
  //// 释放设备 dev 上数据区中的逻辑块 block。 
- // 复位指定逻辑块 block 的逻辑块位图比特位。
+ // 复位指定逻辑块 block 的逻辑块位图比特位
 void free_block(int dev, int block)
 {
 	struct super_block * sb;
@@ -61,20 +63,21 @@ void free_block(int dev, int block)
 
 	if (!(sb = get_super(dev)))       //get super block
 		panic("trying to free block on nonexistent device");
-	if (block < sb->s_firstdatazone || block >= sb->s_nzones)
+	if (block < sb->s_firstdatazone || block >= sb->s_nzones)  // 若逻辑块号小于首个逻辑块号或者大于设备上总逻辑块数
 		panic("trying to free block not in datazone");
-	bh = get_hash_table(dev,block);
+	bh = get_hash_table(dev,block);		// 在hash表中找到该数据块
 	if (bh) {
 		if (bh->b_count != 1) {
 			printk("trying to free block (%04x:%d), count=%d\n",
 				dev,block,bh->b_count);
 			return;
 		}
-		bh->b_dirt=0;
-		bh->b_uptodate=0;
-		brelse(bh);
+		bh->b_dirt=0;			// 复位脏（已修改）标志位
+		bh->b_uptodate=0;		// 复位更新标志
+		brelse(bh);				// 释放缓冲块
 	}
 	block -= sb->s_firstdatazone - 1 ;
+	// 计算 block 在数据区开始算起的逻辑块号（从 1 开始计数）。然后对逻辑块(区段)位图进行操作，复位对应的比特位
 	if (clear_bit(block&8191,sb->s_zmap[block/8192]->b_data)) {
 		printk("block (%04x:%d) ",dev,block+sb->s_firstdatazone-1);
 		panic("free_block: bit already cleared");

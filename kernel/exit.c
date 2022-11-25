@@ -45,6 +45,7 @@ static inline int send_sig(long sig,struct task_struct * p,int priv)
 	return 0;
 }
 
+// 终止会话
 static void kill_session(void)
 {
 	struct task_struct **p = NR_TASKS + task;
@@ -90,6 +91,7 @@ int sys_kill(int pid,int sig)
 }
 
 
+// 通知父进程， 向父进程发送信号SIGCHILD
 static void tell_father(int pid)
 {
 	int i;
@@ -109,10 +111,12 @@ static void tell_father(int pid)
 	release(current);
 }
 
+// 以错误码code退出。 释放页，关闭文件，同步节点，通知父进程
 int do_exit(long code)
 {
 	int i;
 
+	// 释放当前进程代码段和数据段所占的内存页
 	free_page_tables(get_base(current->ldt[1]),get_limit(0x0f));
 	free_page_tables(get_base(current->ldt[2]),get_limit(0x17));
 	for (i=0 ; i<NR_TASKS ; i++)

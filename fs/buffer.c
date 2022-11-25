@@ -352,17 +352,26 @@ void bread_page(unsigned long address,int dev,int b[4])
  * blocks for reading as well. End the argument list with a negative
  * number.
  */
+
+/**
+ * @brief  从指定设备读取指定的一些块
+ * 
+ * @param dev  设备号
+ * @param first 第一块
+ * @param ...  后续的若干块
+ * @return struct buffer_head*  第一块的缓冲区头指针 
+ */
 struct buffer_head * breada(int dev,int first, ...)
 {
 	va_list args;
 	struct buffer_head * bh, *tmp;
 
 	va_start(args,first);
-	if (!(bh=getblk(dev,first)))
+	if (!(bh=getblk(dev,first)))		// 取高速缓冲中指定设备和块号的缓冲区
 		panic("bread: getblk returned NULL\n");
 	if (!bh->b_uptodate)
 		ll_rw_block(READ,bh);
-	while ((first=va_arg(args,int))>=0) {
+	while ((first=va_arg(args,int))>=0) {		// 然后顺序取可变参数表中其它预读块号，并作与上面同样处理，但不引用
 		tmp=getblk(dev,first);
 		if (tmp) {
 			if (!tmp->b_uptodate)
@@ -372,7 +381,7 @@ struct buffer_head * breada(int dev,int first, ...)
 	}
 	va_end(args);
 	wait_on_buffer(bh);
-	if (bh->b_uptodate)
+	if (bh->b_uptodate)		// 如果缓冲区中数据有效，则返回缓冲区头指针
 		return bh;
 	brelse(bh);
 	return (NULL);

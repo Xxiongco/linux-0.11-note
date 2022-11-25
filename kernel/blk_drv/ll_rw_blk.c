@@ -7,6 +7,9 @@
 /*
  * This handles all read/write requests to block devices
  */
+/* 
+ * 该程序处理块设备的所有读/写操作。 
+ */
 #include <errno.h>
 #include <linux/sched.h>
 #include <linux/kernel.h>
@@ -39,21 +42,24 @@ struct blk_dev_struct blk_dev[NR_BLK_DEV] = {
 	{ NULL, NULL }		/* dev lp */          // 6 - lp 打印机设备
 };
 
+// 锁定指定的缓冲区 bh。如果指定的缓冲区已经被其它任务锁定，则使自己睡眠（不可中断地等待）， 
+// 直到被执行解锁缓冲区的任务明确地唤醒。
 static inline void lock_buffer(struct buffer_head * bh)
 {
 	cli();
-	while (bh->b_lock)              // 如果缓冲区已被锁定，则睡眠，直到缓冲区解锁
+	while (bh->b_lock)              // 如果缓冲区已被锁定，则睡眠，直到缓冲区解锁，然后马上锁定之
 		sleep_on(&bh->b_wait); 
 	bh->b_lock=1;
 	sti();
 }
 
+// 解锁缓冲区头bh
 static inline void unlock_buffer(struct buffer_head * bh)
 {
 	if (!bh->b_lock)
 		printk("ll_rw_block.c: buffer not locked\n\r");
 	bh->b_lock = 0;
-	wake_up(&bh->b_wait);
+	wake_up(&bh->b_wait);		// 唤醒等待该缓冲区的任务
 }
 
 /*
@@ -61,7 +67,14 @@ static inline void unlock_buffer(struct buffer_head * bh)
  * It disables interrupts so that it can muck with the
  * request-lists in peace.
  */
-static void add_request(struct blk_dev_struct * dev, struct request * req)    /// 向链表中加入请求项
+
+/**
+ * @brief  向链表中加入请求项
+ * 
+ * @param dev 指定的设备，一般为硬盘
+ * @param req 指定的请求项
+ */
+static void add_request(struct blk_dev_struct * dev, struct request * req)    
 {
 	struct request * tmp;
 
@@ -69,13 +82,13 @@ static void add_request(struct blk_dev_struct * dev, struct request * req)    //
 	cli();
 	if (req->bh)
 		req->bh->b_dirt = 0;
-	if (!(tmp = dev->current_request)) {
+	if (!(tmp = dev->current_request)) {	// 如果 dev 的当前请求(current_request)子段为空，则表示目前该设备没有请求项，本次是第 1 个请求项
 		dev->current_request = req;
 		sti();
-		(dev->request_fn)();
+		(dev->request_fn)();		// 真正的读写请求发生位置。如果是第一个请求项，则直接执行
 		return;
 	}
-	// 如果目前该设备已经有请求项在等待，则首先利用电梯算法搜索最佳位置，然后将当前请求插入请求链表中
+	// 如果目前该设备已经有请求项在等待，则首先利用电梯算法搜索最佳位置，然后将当前请求插入请求链表中； 请求函数在时钟中断时执行
 	for ( ; tmp->next ; tmp=tmp->next)
 		if ((IN_ORDER(tmp,req) ||
 		    !IN_ORDER(tmp,tmp->next)) &&
@@ -86,8 +99,14 @@ static void add_request(struct blk_dev_struct * dev, struct request * req)    //
 	sti();
 }
 
-//// 创建请求项并插入请求队列。参数是：主设备号 major，命令 rw，存放数据的缓冲区头指针 bh。
-// 新的req从request[32] 全局request数组中分配一个空闲项
+
+/**
+ * @brief 创建请求项并插入请求队列
+ * 
+ * @param major 主设备号
+ * @param rw 命令（读/写）
+ * @param bh 存放数据的缓冲区头指针
+ */
 static void make_request(int major,int rw, struct buffer_head * bh)
 {
 	struct request * req;
@@ -148,9 +167,17 @@ repeat:
 	add_request(major+blk_dev,req);
 }
 
-// 低层读写数据块函数
+
 // 该函数主要是在 fs/buffer.c 中被调用。实际的读写操作是由设备的 request_fn()函数完成。 
 // 对于硬盘操作，该函数是 do_hd_request()
+// 软盘			do_fd_request
+// 虚拟盘		do_rd_request()
+/**
+ * @brief 低层读写数据块函数
+ * 
+ * @param rw 命令（读/写）
+ * @param bh 存放数据的缓冲区头指针
+ */
 void ll_rw_block(int rw, struct buffer_head * bh)
 {
 	unsigned int major;

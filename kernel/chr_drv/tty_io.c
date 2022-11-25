@@ -52,18 +52,18 @@
  // 串口终端 2 的初始化数据。
 struct tty_struct tty_table[] = {
 	{
-		{ICRNL,		/* change incoming CR to NL */
-		OPOST|ONLCR,	/* change outgoing NL to CRNL */
-		0,
-		ISIG | ICANON | ECHO | ECHOCTL | ECHOKE,
-		0,		/* console termio */
-		INIT_C_CC},
-		0,			/* initial pgrp */
-		0,			/* initial stopped */
-		con_write,
-		{0,0,0,0,""},		/* console read-queue */
-		{0,0,0,0,""},		/* console write-queue */
-		{0,0,0,0,""}		/* console secondary queue */
+		{ICRNL,		/* change incoming CR to NL */       	// 将输入的CR转换为NL
+		OPOST|ONLCR,	/* change outgoing NL to CRNL */	// 将输出的NL转换为CRNL
+		0,													// 控制模式标志初始化为0
+		ISIG | ICANON | ECHO | ECHOCTL | ECHOKE,			// 本地模式标志
+		0,		/* console termio */						// 控制台termio， 不用线路规程
+		INIT_C_CC},											// 控制字符数组
+		0,			/* initial pgrp */							// 所属初始进程组
+		0,			/* initial stopped */						// 初始停止标志
+		con_write,												// tty写函数指针
+		{0,0,0,0,""},		/* console read-queue */			// tty控制台读队列
+		{0,0,0,0,""},		/* console write-queue */			// tty控制台写队列
+		{0,0,0,0,""}		/* console secondary queue */		// tty控制台辅助（第二）队列
 	},{
 		{0, /* no translation */
 		0,  /* no translation */
@@ -112,7 +112,9 @@ void tty_init(void)
 	con_init();         // 初始化控制台终端。(console.c, 617)
 }
 
-//根据process group设置signal
+//// tty 键盘终端字符处理函数。 
+ // 参数：tty - 相应 tty 终端结构指针；mask - 信号屏蔽位。
+//  主要是设置信号屏蔽位
 void tty_intr(struct tty_struct * tty, int mask)
 {
 	int i;
@@ -144,12 +146,15 @@ static void sleep_if_full(struct tty_queue * queue)
 	sti();
 }
 
+//// 等待按键。 
+ // 如果控制台的读队列缓冲区空则让进程进入可中断的睡眠状态。
 void wait_for_keypress(void)
 {
 	sleep_if_empty(&tty_table[0].secondary);
 }
 
 // 复制成规范模式字符序列：回车换行大小写转化，正确处理键盘信号
+// 参数：tty - 指定终端的 tty 结构。
 void copy_to_cooked(struct tty_struct * tty)
 {
 	signed char c;
@@ -249,8 +254,15 @@ void copy_to_cooked(struct tty_struct * tty)
 	wake_up(&tty->secondary.proc_list);
 }
 
- // 参数：channel - 子设备号；buf - 缓冲区指针；nr - 欲读字节数。 
- // 返回已读字节数。     也可处理串口终端读
+
+ /**
+  * @brief 从指定的设备中读取指定长度的字节至指定的缓冲区中
+  * 
+  * @param channel 指定的子设备号； 本版本 linux 内核的终端只有 3 个子设备，分别是控制台(0)、串口终端 1(1)和串口终端 2(2)。 
+  * @param buf 目标缓冲区
+  * @param nr 欲读取的字节数
+  * @return int 已经读取的字节数
+  */
 int tty_read(unsigned channel, char * buf, int nr)
 {
 	struct tty_struct * tty;
@@ -258,7 +270,7 @@ int tty_read(unsigned channel, char * buf, int nr)
 	int minimum,time,flag=0;
 	long oldalarm;
 
- // 本版本 linux 内核的终端只有 3 个子设备，分别是控制台(0)、串口终端 1(1)和串口终端 2(2)。 
+
  // 所以任何大于 2 的子设备号都是非法的。写的字节数当然也不能小于 0 的。
 	if (channel>2 || nr<0) return -1;
 	tty = &tty_table[channel];
@@ -287,13 +299,13 @@ int tty_read(unsigned channel, char * buf, int nr)
 			continue;
 		}
 		do {
-			GETCH(tty->secondary,c);      //============key=========
+			GETCH(tty->secondary,c);      //============key========= 放入辅助队列
 			if (c==EOF_CHAR(tty) || c==10)
 				tty->secondary.data--;
 			if (c==EOF_CHAR(tty) && L_CANON(tty))
 				return (b-buf);
 			else {
-				put_fs_byte(c,b++);
+				put_fs_byte(c,b++);      //============key========= 放入buffer
 				if (!--nr)
 					break;
 			}
@@ -315,6 +327,15 @@ int tty_read(unsigned channel, char * buf, int nr)
 	return (b-buf);                 // 返回已读取的字符数
 }
 
+
+/**
+ * @brief 向指定的设备写入字符
+ * 
+ * @param channel 指定的子设备号
+ * @param buf 字符来源缓冲区
+ * @param nr 待写入的字节数
+ * @return int 已经写入的字节数
+ */
 int tty_write(unsigned channel, char * buf, int nr)
 {
 	static cr_flag=0;
@@ -325,10 +346,10 @@ int tty_write(unsigned channel, char * buf, int nr)
 	tty = channel + tty_table;
 	while (nr>0) {
 		sleep_if_full(&tty->write_q);
-		if (current->signal)
+		if (current->signal)		// 如果当前进程有信号要处理，则退出
 			break;
 		while (nr>0 && !FULL(tty->write_q)) {
-			c=get_fs_byte(b);
+			c=get_fs_byte(b);		//============key========= 从缓冲区得到字符
 			if (O_POST(tty)) {
 				if (c=='\r' && O_CRNL(tty))
 					c='\n';
@@ -344,9 +365,11 @@ int tty_write(unsigned channel, char * buf, int nr)
 			}
 			b++; nr--;
 			cr_flag = 0;
-			PUTCH(c,tty->write_q);     //============key=========
+			PUTCH(c,tty->write_q);     //============key========= 将字符写入队列
 		}
-		tty->write(tty);
+		// 若字节全部写完，或者写队列已满，则程序执行到这里。调用对应 tty 的写函数，若还有字节要写， 
+ 		// 则等待写队列不满，所以调用调度程序，先去执行其它任务
+		tty->write(tty);				 //============key========= 将字符写入tty
 		if (nr>0)
 			schedule();
 	}
@@ -368,6 +391,9 @@ int tty_write(unsigned channel, char * buf, int nr)
  * totally innocent.
  */
 // 在串口读字符中断(rs_io.s, 109)和键盘中断(kerboard.S, 69)中调用。
+//// tty 中断处理调用函数 - 执行 tty 中断处理。 
+ // 参数：tty - 指定的 tty 终端号（0，1 或 2）。 
+ // 将指定 tty 终端队列缓冲区中的字符复制成规范(熟)模式字符并存放在辅助队列(规范模式队列)中。
 void do_tty_interrupt(int tty)
 {
 	copy_to_cooked(tty_table+tty);

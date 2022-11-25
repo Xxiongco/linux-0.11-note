@@ -12,6 +12,11 @@
  * 
  *  modified by Drew Eckhardt to check nr of hd's from the CMOS.
  */
+/* 
+ * 本程序是底层硬盘中断辅助程序。主要用于扫描请求列表，使用中断在函数之间跳转。 
+ * 由于所有的函数都是在中断里调用的，所以这些函数不可以睡眠。请特别注意。 
+ * 由 Drew Eckhardt 修改，利用 CMOS 信息检测硬盘数。
+ */
 
 #include <linux/config.h>
 #include <linux/sched.h>
@@ -22,17 +27,18 @@
 #include <asm/io.h>
 #include <asm/segment.h>
 
-#define MAJOR_NR 3
+#define MAJOR_NR 3		// 硬盘主设备号是 3
 #include "blk.h"
 
+// 读 CMOS 参数宏函数
 #define CMOS_READ(addr) ({ \
 outb_p(0x80|addr,0x70); \
 inb_p(0x71); \
 })
 
 /* Max read/write errors/sector */
-#define MAX_ERRORS	7
-#define MAX_HD		2
+#define MAX_ERRORS	7		// 读/写一个扇区时最大出错次数
+#define MAX_HD		2		// 最多硬盘数
 
 static void recal_intr(void);        // 硬盘中断程序在复位操作时会调用的重新校正函数(287 行)
 
@@ -326,7 +332,7 @@ void do_hd_request(void)
 	unsigned int sec,head,cyl;
 	unsigned int nsect;
 
-	INIT_REQUEST;
+	INIT_REQUEST;		// 检查请求的合法性
 	dev = MINOR(CURRENT->dev);
 	block = CURRENT->sector;
 	if (dev >= 5*NR_HD || block+2 > hd[dev].nr_sects) {
@@ -372,9 +378,10 @@ void do_hd_request(void)
 		panic("unknown hd-command");
 }
 
+// 硬盘系统初始化
 void hd_init(void)
 {
-	blk_dev[MAJOR_NR].request_fn = DEVICE_REQUEST;
+	blk_dev[MAJOR_NR].request_fn = DEVICE_REQUEST;	// do_hd_request()
 	set_intr_gate(0x2E,&hd_interrupt);          //set interrupt
 	outb_p(inb_p(0x21)&0xfb,0x21);      //往几个 IO 端口上读写，其作用是允许硬盘控制器发送中断请求信号
 	outb(inb_p(0xA1)&0xbf,0xA1);

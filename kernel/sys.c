@@ -3,6 +3,8 @@
  *
  *  (C) 1991  Linus Torvalds
  */
+// sys.c 程序主要包含有各个系统调用功能的实现函数。其中，若返回值为-ENOSYS，则表示本版的 linux
+// 还没有实现该功能，可以参考目前的代码来了解它们的实现方法。
 
 #include <errno.h>
 
@@ -143,12 +145,16 @@ int sys_setreuid(int ruid, int euid)
 	return 0;
 }
 
+// 设置任务用户号(uid)。如果任务没有超级用户特权，它可以使用 setuid()将其有效 uid 
+ // （effective uid）设置成其保留 uid(saved uid)或其实际 uid(real uid)。如果任务有 
+ // 超级用户特权，则实际 uid、有效 uid 和保留 uid 都被设置成参数指定的 uid。
 int sys_setuid(int uid)
 {
 	return(sys_setreuid(uid, uid));
 }
 
-// 设置系统时间和日期。
+// 设置系统时间和日期。参数 tptr 是从 1970 年 1 月 1 日 00:00:00 GMT 开始计时的时间值（秒）。 
+ // 调用进程必须具有超级用户权限。
 int sys_stime(long * tptr)
 {
 	if (!suser())    //super user
@@ -171,6 +177,7 @@ int sys_times(struct tms * tbuf)
 }
 
 
+// 设置数据段
 int sys_brk(unsigned long end_data_seg)
 {
 	if (end_data_seg >= current->end_code &&
@@ -221,6 +228,8 @@ int sys_setsid(void)
 	return current->pgrp;
 }
 
+// 获取系统信息。其中 utsname 结构包含 5 个字段，分别是：本版本操作系统的名称、网络节点名称、 
+ // 当前发行级别、版本级别和硬件类型名称。
 int sys_uname(struct utsname * name)
 {
 	static struct utsname thisname = {

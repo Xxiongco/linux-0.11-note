@@ -11,6 +11,7 @@
  */
 // FS: Extra data #2    指向的GDT/IDT中的段描述符
 // GS: Extra data #3
+// prinkt用于打印内核日志
 
 #include <stdarg.h>
 #include <stddef.h>
