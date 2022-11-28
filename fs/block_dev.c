@@ -65,6 +65,15 @@ int block_write(int dev, long * pos, char * buf, int count)
 	return written;
 }
 
+/**
+ * @brief 从指定设备的指定位置读入指定字节数的数据到buf
+ * 
+ * @param dev 设备号
+ * @param pos 位置
+ * @param buf 数据目的缓冲区
+ * @param count 字节数
+ * @return int 成功读取字节数
+ */
 int block_read(int dev, unsigned long * pos, char * buf, int count)
 {
 	int block = *pos >> BLOCK_SIZE_BITS;

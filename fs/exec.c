@@ -28,8 +28,8 @@
 #include <linux/mm.h>
 #include <asm/segment.h>
 
-extern int sys_exit(int exit_code);
-extern int sys_close(int fd);
+extern int sys_exit(int exit_code);		// 程序退出
+extern int sys_close(int fd);			// 文件关闭
 
 /*
  * MAX_ARG_PAGES defines the number of pages allocated for arguments
@@ -42,6 +42,14 @@ extern int sys_close(int fd);
  * create_tables() parses the env- and arg-strings in new user
  * memory and creates the pointer tables from them, and puts their
  * addresses on the "stack", returning the new stack pointer value.
+ */
+/**
+ * @brief 在新用户堆栈中创建环境和参数变量指针表
+ * 
+ * @param p  以数据段为起点的参数和环境信息偏移指针
+ * @param argc 参数个数
+ * @param envc 环境变量数
+ * @return unsigned long* 堆栈指针
  */
 static unsigned long * create_tables(char * p,int argc,int envc)
 {
@@ -71,6 +79,7 @@ static unsigned long * create_tables(char * p,int argc,int envc)
 
 /*
  * count() counts the number of arguments/envelopes
+ * 计算参数个数
  */
 static int count(char ** argv)
 {
@@ -151,6 +160,13 @@ static unsigned long copy_strings(int argc,char ** argv,unsigned long *page,
 	return p;
 }
 
+/**
+ * @brief 修改局部描述符表中的描述符基址和段限长，并将参数和环境空间页面放置在数据段末端
+ * 
+ * @param text_size 执行文件投不中 a_text字段给出的代码段长度值
+ * @param page 参数和环境空间页面指针数组
+ * @return unsigned long   数据段限长值(64MB)
+ */
 static unsigned long change_ldt(unsigned long text_size,unsigned long * page)
 {
 	unsigned long code_limit,data_limit,code_base,data_base;

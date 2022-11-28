@@ -7,6 +7,8 @@
 /*
  * super.c contains code to handle the super-block tables.
  */
+// 处理超级块
+
 #include <linux/config.h>
 #include <linux/sched.h>
 #include <linux/kernel.h>
@@ -15,8 +17,8 @@
 #include <errno.h>
 #include <sys/stat.h>
 
-int sync_dev(int dev);
-void wait_for_keypress(void);
+int sync_dev(int dev);				// 对指定设备执行高速缓冲与设备上数据的同步操作
+void wait_for_keypress(void);		// 等待击键
 
 /* set_bit uses setb, as gas doesn't recognize setc */
 #define set_bit(bitnr,addr) ({ \
@@ -24,10 +26,11 @@ register int __res __asm__("ax"); \
 __asm__("bt %2,%3;setb %%al":"=a" (__res):"a" (0),"r" (bitnr),"m" (*(addr))); \
 __res; })
 
-struct super_block super_block[NR_SUPER];   // 跟设备都挂载于此处
+struct super_block super_block[NR_SUPER];   // 根设备都挂载于此处
 /* this is initialized in init/main.c    setup */
 int ROOT_DEV = 0;
 
+//// 锁定指定的超级块
 static void lock_super(struct super_block * sb)
 {
 	cli();
@@ -37,6 +40,7 @@ static void lock_super(struct super_block * sb)
 	sti();
 }
 
+//// 对指定超级块解锁
 static void free_super(struct super_block * sb)
 {
 	cli();
@@ -45,6 +49,7 @@ static void free_super(struct super_block * sb)
 	sti();
 }
 
+//// 睡眠等待超级块解锁
 static void wait_on_super(struct super_block * sb)
 {
 	cli();
@@ -53,6 +58,7 @@ static void wait_on_super(struct super_block * sb)
 	sti();
 }
 
+//// 取指定设备的超级块。返回该超级块结构指针
 struct super_block * get_super(int dev)
 {
 	struct super_block * s;
@@ -61,6 +67,10 @@ struct super_block * get_super(int dev)
 		return NULL;
 	s = 0+super_block;          // s 指向超级块数组开始处。搜索整个超级块数组，寻找指定设备的超级块
 	while (s < NR_SUPER+super_block)
+	// 如果当前搜索项是指定设备的超级块，则首先等待该超级块解锁（若已经被其它进程上锁的话）。 
+	// 在等待期间，该超级块有可能被其它设备使用，因此此时需再判断一次是否是指定设备的超级块， 
+ 	// 如果是则返回该超级块的指针。否则就重新对超级块数组再搜索一遍，因此 s 重又指向超级块数组 
+ 	// 开始处
 		if (s->s_dev == dev) {
 			wait_on_super(s);
 			if (s->s_dev == dev)
@@ -71,6 +81,7 @@ struct super_block * get_super(int dev)
 	return NULL;
 }
 
+//// 释放指定设备的超级块
 void put_super(int dev)
 {
 	struct super_block * sb;
@@ -173,6 +184,12 @@ static struct super_block * read_super(int dev)
 	return s;
 }
 
+/**
+ * @brief 卸载文件系统调用函数
+ * 
+ * @param dev_name 设备文件名
+ * @return int 0-成功，other-错误号
+ */
 int sys_umount(char * dev_name)
 {
 	struct m_inode * inode;
@@ -206,8 +223,15 @@ int sys_umount(char * dev_name)
 	return 0;
 }
 
-//// 安装文件系统调用函数。 
- // 参数 dev_name 是设备文件名，dir_name 是安装到的目录名，rw_flag 被安装文件的读写标志
+
+ /**
+  * @brief 安装文件系统
+  * 
+  * @param dev_name 设备文件名
+  * @param dir_name 安装到的目录名
+  * @param rw_flag 被安装文件的读写标志
+  * @return int 0-成功，other-错误号
+  */
 int sys_mount(char * dev_name, char * dir_name, int rw_flag)
 {
 	struct m_inode * dev_i, * dir_i;

@@ -3,6 +3,7 @@
  *
  *  (C) 1991  Linus Torvalds
  */
+// 输入输出控制
 
 #include <string.h>
 #include <errno.h>
@@ -16,6 +17,7 @@ typedef int (*ioctl_ptr)(int dev,int cmd,int arg);
 
 #define NRDEVS ((sizeof (ioctl_table))/(sizeof (ioctl_ptr)))
 
+// ioctl 操作函数指针表
 static ioctl_ptr ioctl_table[]={
 	NULL,		/* nodev */
 	NULL,		/* /dev/mem */
@@ -26,7 +28,14 @@ static ioctl_ptr ioctl_table[]={
 	NULL,		/* /dev/lp */
 	NULL};		/* named pipes */
 	
-
+/**
+ * @brief 输入输出控制函数
+ * 
+ * @param fd 文件句柄
+ * @param cmd 命令码
+ * @param arg 其他参数
+ * @return int 
+ */
 int sys_ioctl(unsigned int fd, unsigned int cmd, unsigned long arg)
 {	
 	struct file * filp;

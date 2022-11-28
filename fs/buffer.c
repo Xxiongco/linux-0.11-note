@@ -12,6 +12,7 @@
  * sleep-on-calls. These should be extremely quick, though (I hope).
  */
 
+// 该文件中的函数主要用于对设备高速缓冲的操作和处理
 /* 
  * 'buffer.c'用于实现缓冲区高速缓存功能。通过不让中断过程改变缓冲区，而是让调用者 
  * 来执行，避免了竞争条件（当然除改变数据以外）。注意！由于中断可以唤醒一个调用者， 
@@ -49,7 +50,7 @@ static inline void wait_on_buffer(struct buffer_head * bh)
 	sti();
 }
 
-//刷缓存
+//系统调用，刷缓存， 同步设备和内存高速缓冲中数据； 将缓存中的数据写入设备？
 int sys_sync(void)
 {
 	int i;
@@ -57,14 +58,16 @@ int sys_sync(void)
 
 	sync_inodes();		/* write out inodes into buffers */
 	bh = start_buffer;
+	// 扫描所有高速缓冲区，对于已被修改的缓冲块产生写盘请求，将缓冲中数据与设备中同步
 	for (i=0 ; i<NR_BUFFERS ; i++,bh++) {
 		wait_on_buffer(bh);
 		if (bh->b_dirt)
-			ll_rw_block(WRITE,bh);
+			ll_rw_block(WRITE,bh);	// 产生写设备块请求
 	}
 	return 0;
 }
 
+//// 对指定设备进行高速缓冲数据与设备上数据的同步操作
 int sync_dev(int dev)
 {
 	int i;
@@ -90,6 +93,7 @@ int sync_dev(int dev)
 	return 0;
 }
 
+//// 使指定设备在高速缓冲区中的数据无效（释放）
 void inline invalidate_buffers(int dev)
 {
 	int i;
@@ -101,7 +105,7 @@ void inline invalidate_buffers(int dev)
 			continue;
 		wait_on_buffer(bh);
 		if (bh->b_dev == dev)
-			bh->b_uptodate = bh->b_dirt = 0;
+			bh->b_uptodate = bh->b_dirt = 0;		// ====== key ======
 	}
 }
 
@@ -138,6 +142,7 @@ void check_disk_change(int dev)
 #define _hashfn(dev,block) (((unsigned)(dev^block))%NR_HASH)
 #define hash(dev,block) hash_table[_hashfn(dev,block)]
 
+//// 从 hash 队列和空闲缓冲队列中移走指定的缓冲块
 static inline void remove_from_queues(struct buffer_head * bh)
 {
 /* remove from hash-queue */
@@ -156,6 +161,7 @@ static inline void remove_from_queues(struct buffer_head * bh)
 		free_list = bh->b_next_free;
 }
 
+//// 将指定缓冲区插入空闲链表尾并放入 hash 队列中
 static inline void insert_into_queues(struct buffer_head * bh)
 {
 /* put at end of free list */
@@ -191,6 +197,13 @@ static struct buffer_head * find_buffer(int dev, int block)
  * will force it bad). This shouldn't really happen currently, but
  * the code is ready.
  */
+/**
+ * @brief 为指定的设备和块号查找缓冲头， get bh from hash table
+ * 
+ * @param dev 设备
+ * @param block 块号
+ * @return struct buffer_head* 缓冲头指针
+ */
 struct buffer_head * get_hash_table(int dev, int block)
 {
 	struct buffer_head * bh;
@@ -215,6 +228,7 @@ struct buffer_head * get_hash_table(int dev, int block)
  */
 // 下面宏定义用于同时判断缓冲区的修改标志和锁定标志，并且定义修改标志的权重要比锁定标志大
 #define BADNESS(bh) (((bh)->b_dirt<<1)+(bh)->b_lock)
+
 // 在缓冲区获得空闲缓冲块，首次调用时， dev = 0x300, block = 0
 struct buffer_head * getblk(int dev,int block)
 {
@@ -296,7 +310,7 @@ void brelse(struct buffer_head * buf)     // 缓冲区占用释放，但是内�
  * bread() reads a specified block and returns the buffer that contains
  * it. It returns NULL if the block was unreadable.
  */
-//// 从指定设备上读取指定的数据块
+//// 从指定设备上读取指定的数据块, 返回缓冲头指针
 struct buffer_head * bread(int dev,int block)
 {
 	struct buffer_head * bh;
@@ -305,7 +319,7 @@ struct buffer_head * bread(int dev,int block)
 		panic("bread: getblk returned NULL\n");
 	if (bh->b_uptodate)                           // 如果该缓冲区中的数据是有效的（已更新的）可以直接使用
 		return bh;
-	ll_rw_block(READ,bh);             // 否则调用 ll_rw_block()函数，产生读设备块请求。并等待缓冲区解锁
+	ll_rw_block(READ,bh);             // 否则调用 ll_rw_block()函数，产生读设备块请求。并等待缓冲区解锁 === key ===
 	wait_on_buffer(bh);
 	if (bh->b_uptodate)               // 如果该缓冲区已更新，则返回缓冲区头指针，退出
 		return bh;
@@ -326,6 +340,11 @@ __asm__("cld\n\t" \
  * all at the same time, not waiting for one to be read, and then another
  * etc.
  */
+/* 
+ * bread_page 一次读四个缓冲块内容读到内存指定的地址。它是一个完整的函数， 
+ * 因为同时读取四块可以获得速度上的好处，不用等着读一块，再读一块了。 
+ */ 
+ //// 读设备上一个页面（4 个缓冲区）的内容到内存指定的地址。  块 = 1k， page = 4k
 void bread_page(unsigned long address,int dev,int b[4])
 {
 	struct buffer_head * bh[4];

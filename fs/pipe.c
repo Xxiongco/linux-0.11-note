@@ -3,6 +3,7 @@
  *
  *  (C) 1991  Linus Torvalds
  */
+// 本程序执行管道文件的读写操作
 
 #include <signal.h>
 
@@ -10,6 +11,14 @@
 #include <linux/mm.h>	/* for get_free_page */
 #include <asm/segment.h>
 
+/**
+ * @brief 读管道
+ * 
+ * @param inode 管道对应的i节点
+ * @param buf 目的用户缓冲区
+ * @param count 待读取的字节数
+ * @return int 实际读取的字节数
+ */
 int read_pipe(struct m_inode * inode, char * buf, int count)
 {
 	int chars, size, read = 0;
@@ -32,12 +41,20 @@ int read_pipe(struct m_inode * inode, char * buf, int count)
 		PIPE_TAIL(*inode) += chars;
 		PIPE_TAIL(*inode) &= (PAGE_SIZE-1);
 		while (chars-->0)
-			put_fs_byte(((char *)inode->i_size)[size++],buf++);
+			put_fs_byte(((char *)inode->i_size)[size++],buf++);		// === key ===
 	}
 	wake_up(&inode->i_wait);
 	return read;
 }
 	
+/**
+ * @brief 写管道
+ * 
+ * @param inode 管道对应的i节点
+ * @param buf 源用户缓冲区
+ * @param count 待写入的字节数
+ * @return  int 实际写入的字节数
+ */
 int write_pipe(struct m_inode * inode, char * buf, int count)
 {
 	int chars, size, written = 0;
@@ -68,6 +85,11 @@ int write_pipe(struct m_inode * inode, char * buf, int count)
 	return written;
 }
 
+
+//// 创建管道系统调用函数。 
+ // 在 fildes 所指的数组中创建一对文件句柄(描述符)。这对文件句柄指向一管道 i 节点。fildes[0] 
+ // 用于读管道中数据，fildes[1]用于向管道中写入数据。 
+ // 成功时返回 0，出错时返回-1。
 int sys_pipe(unsigned long * fildes)
 {
 	struct m_inode * inode;

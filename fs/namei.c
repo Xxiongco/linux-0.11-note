@@ -7,6 +7,7 @@
 /*
  * Some corrections by tytso.
  */
+// 处理文件名（name）与i节点之间的关系
 
 #include <linux/sched.h>
 #include <linux/kernel.h>
@@ -26,9 +27,9 @@
  */
 /* #define NO_TRUNCATE */
 
-#define MAY_EXEC 1
-#define MAY_WRITE 2
-#define MAY_READ 4
+#define MAY_EXEC 1		// 可执行(可进入)
+#define MAY_WRITE 2		// 可写
+#define MAY_READ 4		// 可读
 
 /*
  *	permission()
@@ -36,6 +37,13 @@
  * is used to check for read/write/execute permissions on a file.
  * I don't know if we should look at just the euid or both euid and
  * uid, but that should be easily changed.
+ */
+/**
+ * @brief 检测文件读写访问许可权限
+ * 
+ * @param inode i节点
+ * @param mask 访问属性屏蔽码
+ * @return int 1-访问许可，0-不允许访问
  */
 static int permission(struct m_inode * inode,int mask)
 {
@@ -60,9 +68,20 @@ static int permission(struct m_inode * inode,int mask)
  *
  * NOTE! unlike strncmp, match returns 1 for success, 0 for failure.
  */
-//// 指定长度字符串比较函数。 
- // 参数：len - 比较的字符串长度；name - 文件名指针；de - 目录项结构。 
- // 返回：相同返回 1，不同返回 0。
+/* 
+ * ok，我们不能使用 strncmp 字符串比较函数，因为名称不在我们的数据空间(不在内核空间)。 
+ * 因而我们只能使用 match()。问题不大。match()同样也处理一些完整的测试。 
+ * 
+ * 注意！与 strncmp 不同的是 match()成功时返回 1，失败时返回 0。 
+ */
+ /**
+  * @brief 指定长度字符串比较函数，name与目录项中的name比较
+  * 
+  * @param len 比较的字符串长度
+  * @param name 文件名
+  * @param de  目录项结构
+  * @return int 1-相同，0-不同
+  */
 static int match(int len,const char * name,struct dir_entry * de)
 {
 	register int same __asm__("ax");
@@ -91,9 +110,15 @@ static int match(int len,const char * name,struct dir_entry * de)
  * This also takes care of the few special cases due to '..'-traversal
  * over a pseudo-root and a mount point.
  */
-//// 查找指定目录和文件名的目录项。 
- // 参数：dir - 指定目录 i 节点的指针；name - 文件名；namelen - 文件名长度； 
- // 返回：高速缓冲区指针；res_dir - 返回的目录项结构指针；
+ /**
+  * @brief 在指定的目录中查找一个与名字匹配的目录项
+  * 
+  * @param dir 指定目录的i节点
+  * @param name 文件夹名
+  * @param namelen 文件名长度
+  * @param res_dir 返回的目录项结构指针
+  * @return struct buffer_head*  缓冲头指针
+  */
 static struct buffer_head * find_entry(struct m_inode ** dir,
 	const char * name, int namelen, struct dir_entry ** res_dir)          // 寻找当前文件夹下的某个子文件夹
 {
@@ -170,6 +195,15 @@ static struct buffer_head * find_entry(struct m_inode ** dir,
  * may not sleep between calling this and putting something into
  * the entry, as someone else might have used it while you slept.
  */
+/**
+ * @brief 往指定目录中添加一文件目录项
+ * 
+ * @param dir 指定目录
+ * @param name 待添加的文件夹名
+ * @param namelen 文件名长度
+ * @param res_dir 返回的目录项结构指针
+ * @return struct buffer_head*  缓冲头指针
+ */
 static struct buffer_head * add_entry(struct m_inode * dir,
 	const char * name, int namelen, struct dir_entry ** res_dir)
 {
@@ -233,9 +267,12 @@ static struct buffer_head * add_entry(struct m_inode * dir,
  * Getdir traverses the pathname until it hits the topmost directory.
  * It returns NULL on failure.
  */
-//// 搜寻指定路径名的目录。 
-// 参数：pathname - 路径名。 
-// 返回：目录的 i 节点指针。失败时返回 NULL
+/**
+ * @brief 搜寻指定路径名的目录
+ * 
+ * @param pathname 路径名
+ * @return struct m_inode*   目录的 i 节点指针。失败时返回 NULL
+ */
 static struct m_inode * get_dir(const char * pathname)
 {
 	char c;
@@ -290,8 +327,14 @@ static struct m_inode * get_dir(const char * pathname)
  * dir_namei() returns the inode of the directory of the
  * specified name, and the name within that directory.
  */
-// 参数：pathname - 目录路径名；namelen - 路径名长度。 
-// 返回：指定目录名最顶层目录的 i 节点指针和最顶层目录名及其长度
+/**
+ * @brief 返回指定目录名的 i 节点指针，以及在最顶层目录的名称
+ * 
+ * @param pathname 指定目录路径名
+ * @param namelen 返回的路径名长度
+ * @param name 返回的最顶层目录的名称
+ * @return struct m_inode*  返回的最顶层目录的i节点指针
+ */
 static struct m_inode * dir_namei(const char * pathname,
 	int * namelen, const char ** name)
 {
@@ -317,9 +360,12 @@ static struct m_inode * dir_namei(const char * pathname,
  * Open, link etc use their own routines, but this is enough for things
  * like 'chmod' etc.
  */
-//// 取指定路径名的 i 节点。 
- // 参数：pathname - 路径名。 
- // 返回：对应的 i 节点。
+ /**
+  * @brief 取指定路径名的 i 节点
+  * 
+  * @param pathname 路径名
+  * @return struct m_inode*  对应的 i 节点
+  */
 struct m_inode * namei(const char * pathname)
 {
 	const char * basename;
@@ -354,12 +400,18 @@ struct m_inode * namei(const char * pathname)
  *
  * namei for open - this is in fact almost the whole open-routine.
  */
+/**
+ * @brief 打开 namei
+ * 
+ * @param pathname 文件路径名
+ * @param flag 文件打开标志
+ * @param mode 文件访问许可属性
+ * @param res_inode 返回的i节点指针
+ * @return int 0-成功，others-错误码
+ */
 int open_namei(const char * pathname, int flag, int mode,
 	struct m_inode ** res_inode)
 {
-	//// 文件打开 name i 函数
-	// 参数：pathname - 文件路径名；flag - 文件打开标志；mode - 文件访问许可属性； 
-    // 返回：成功返回 0，否则返回出错码；res_inode - 返回的对应文件路径名的的 i 节点指针。
 	const char * basename;
 	int inr,dev,namelen;
 	struct m_inode * dir, *inode;
@@ -432,6 +484,14 @@ int open_namei(const char * pathname, int flag, int mode,
 	return 0;
 }
 
+/**
+ * @brief 创建一个特殊文件或普通文件节点。由mod和dev指定文件系统节点
+ * 
+ * @param filename 路径名
+ * @param mode 指定使用许可+所创建节点类型
+ * @param dev 设备号
+ * @return int 0-成功，others-错误号
+ */
 int sys_mknod(const char * filename, int mode, int dev)
 {
 	const char * basename;
@@ -483,6 +543,13 @@ int sys_mknod(const char * filename, int mode, int dev)
 	return 0;
 }
 
+/**
+ * @brief 创建目录
+ * 
+ * @param pathname 路径名 
+ * @param mode 目录使用的权限属性
+ * @return int 0-成功，Others-错误码
+ */
 int sys_mkdir(const char * pathname, int mode)
 {
 	const char * basename;
@@ -563,6 +630,12 @@ int sys_mkdir(const char * pathname, int mode)
 /*
  * routine to check that the specified directory is empty (for rmdir)
  */
+/**
+ * @brief 检查指定目录是否是空的
+ * 
+ * @param inode 指定目录的i节点指针
+ * @return int 0-空，1-不空
+ */
 static int empty_dir(struct m_inode * inode)
 {
 	int nr,block;
@@ -607,6 +680,7 @@ static int empty_dir(struct m_inode * inode)
 	return 1;
 }
 
+// 删除指定名称的目录
 int sys_rmdir(const char * name)
 {
 	const char * basename;
@@ -683,6 +757,9 @@ int sys_rmdir(const char * name)
 	return 0;
 }
 
+// 删除文件名以及可能也删除其相关的文件
+// 从文件系统删除一个名字。如果是一个文件的最后一个连接，并且没有进程正打开该文件，
+// 则该文件也将被删除，并释放所占用的设备空间
 int sys_unlink(const char * name)
 {
 	const char * basename;
@@ -741,6 +818,13 @@ int sys_unlink(const char * name)
 	return 0;
 }
 
+/**
+ * @brief 为一个已经存在的文件创建一个新链接（hard link）
+ * 
+ * @param oldname 原路径名
+ * @param newname 新的路径名
+ * @return int 0-成功，others-错误码
+ */
 int sys_link(const char * oldname, const char * newname)
 {
 	struct dir_entry * de;

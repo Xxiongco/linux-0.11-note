@@ -3,6 +3,7 @@
  *
  *  (C) 1991  Linus Torvalds
  */
+// 该程序含有处理 i 节点的函数
 
 #include <string.h>
 #include <sys/stat.h>
@@ -12,11 +13,12 @@
 #include <linux/mm.h>
 #include <asm/system.h>
 
-struct m_inode inode_table[NR_INODE]={{0,},};
+struct m_inode inode_table[NR_INODE]={{0,},};       // 32个i节点
 
 static void read_inode(struct m_inode * inode);
 static void write_inode(struct m_inode * inode);
 
+// 等待指定的i节点可用
 static inline void wait_on_inode(struct m_inode * inode)
 {
 	cli();
@@ -25,6 +27,7 @@ static inline void wait_on_inode(struct m_inode * inode)
 	sti();
 }
 
+// 锁定指定的i节点
 static inline void lock_inode(struct m_inode * inode)
 {
 	cli();
@@ -34,12 +37,14 @@ static inline void lock_inode(struct m_inode * inode)
 	sti();
 }
 
+// 解锁指定的i节点
 static inline void unlock_inode(struct m_inode * inode)
 {
 	inode->i_lock=0;
 	wake_up(&inode->i_wait);
 }
 
+// 释放dev设备中的所有i节点
 void invalidate_inodes(int dev)
 {
 	int i;
@@ -51,11 +56,12 @@ void invalidate_inodes(int dev)
 		if (inode->i_dev == dev) {
 			if (inode->i_count)
 				printk("inode in use on removed disk\n\r");
-			inode->i_dev = inode->i_dirt = 0;
+			inode->i_dev = inode->i_dirt = 0;		// 释放
 		}
 	}
 }
 
+// 同步内存与设备上的所有 i 节点信息
 void sync_inodes(void)
 {
 	int i;
@@ -65,10 +71,18 @@ void sync_inodes(void)
 	for(i=0 ; i<NR_INODE ; i++,inode++) {
 		wait_on_inode(inode);
 		if (inode->i_dirt && !inode->i_pipe)
-			write_inode(inode);
+			write_inode(inode);		// 写盘
 	}
 }
 
+/**
+ * @brief 块映射处理,为指定i节点的指定块号分配逻辑块
+ * 
+ * @param inode i节点
+ * @param block 数据块号
+ * @param create 创建标志，如果置位，则在对应逻辑块不存在时就申请新的磁盘块
+ * @return int 数据块对应在设备上的逻辑块号
+ */
 static int _bmap(struct m_inode * inode,int block,int create)
 {
 	struct buffer_head * bh;
@@ -76,11 +90,11 @@ static int _bmap(struct m_inode * inode,int block,int create)
 
 	if (block<0)
 		panic("_bmap: block<0");
-	if (block >= 7+512+512*512)
+	if (block >= 7+512+512*512)		// 如果块号大于直接块数 + 间接块数 + 二次间接块数，超出文件系统表示范围，则死机
 		panic("_bmap: block>big");
 	if (block<7) {
 		if (create && !inode->i_zone[block])
-			if (inode->i_zone[block]=new_block(inode->i_dev)) {
+			if (inode->i_zone[block]=new_block(inode->i_dev)) {		// ======= key =======
 				inode->i_ctime=CURRENT_TIME;
 				inode->i_dirt=1;
 			}
@@ -137,16 +151,18 @@ static int _bmap(struct m_inode * inode,int block,int create)
 	return i;
 }
 
+//// 根据 i 节点信息取数据块 block 在设备上对应的逻辑块号, 不创建
 int bmap(struct m_inode * inode,int block)
 {
 	return _bmap(inode,block,0);
 }
 
+//// 根据 i 节点信息取数据块 block 在设备上对应的逻辑块号, 创建
 int create_block(struct m_inode * inode, int block)
 {
 	return _bmap(inode,block,1);
 }
-		
+
 //// 释放一个 i 节点(回写入设备)		
 void iput(struct m_inode * inode)
 {
@@ -194,6 +210,7 @@ repeat:
 	return;
 }
 
+// 从 i 节点表(inode_table)中获取一个空闲 i 节点项
 struct m_inode * get_empty_inode(void)
 {
 	struct m_inode * inode;
@@ -206,8 +223,8 @@ struct m_inode * get_empty_inode(void)
 			if (++last_inode >= inode_table + NR_INODE)
 				last_inode = inode_table;
 			if (!last_inode->i_count) {
-				inode = last_inode;
-				if (!inode->i_dirt && !inode->i_lock)
+				inode = last_inode;				// ====== key ======
+				if (!inode->i_dirt && !inode->i_lock)	
 					break;
 			}
 		}
@@ -228,6 +245,7 @@ struct m_inode * get_empty_inode(void)
 	return inode;
 }
 
+// 获取管道节点。返回为 i 节点指针
 struct m_inode * get_pipe_inode(void)
 {
 	struct m_inode * inode;
@@ -244,8 +262,14 @@ struct m_inode * get_pipe_inode(void)
 	return inode;
 }
 
-//// 从设备上读取指定节点号的 i 节点。 
- // nr - i 节点号。
+
+ /**
+  * @brief 从设备上读取指定节点号的 i 节点
+  * 
+  * @param dev 设备号
+  * @param nr i节点号
+  * @return struct m_inode*   i节点指针
+  */
 struct m_inode * iget(int dev,int nr)
 {
 	struct m_inode * inode, * empty;
@@ -317,6 +341,7 @@ static void read_inode(struct m_inode * inode)
 	unlock_inode(inode);
 }
 
+//// 将指定 i 节点信息写入设备（写入对应的缓冲区中，待缓冲区刷新时会写入盘中）
 static void write_inode(struct m_inode * inode)
 {
 	struct super_block * sb;
