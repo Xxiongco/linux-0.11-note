@@ -93,6 +93,7 @@ struct bucket_desc *free_bucket_desc = (struct bucket_desc *) 0;
 
 /*
  * This routine initializes a bucket description page.
+ * 初始化桶描述符队列（环形队列，队列头部为free_bucket_desc），共有256个描述符项，占用一页内存
  */
 static inline void init_bucket_desc()
 {
@@ -114,6 +115,12 @@ static inline void init_bucket_desc()
 	free_bucket_desc = first;
 }
 
+/**
+ * @brief 分配动态内存函数
+ * 
+ * @param len 请求的内存块长度
+ * @return void* 指向被分配的内存的指针，如果失败返回NULL
+ */
 void *malloc(unsigned int len)
 {
 	struct _bucket_dir	*bdir;
@@ -124,10 +131,10 @@ void *malloc(unsigned int len)
 	 * First we search the bucket_dir to find the right bucket change
 	 * for this request.
 	 */
-	for (bdir = bucket_dir; bdir->size; bdir++)
+	for (bdir = bucket_dir; bdir->size; bdir++)		// 搜索合适大小的同描述符
 		if (bdir->size >= len)
 			break;
-	if (!bdir->size) {
+	if (!bdir->size) {		// 最大4096B
 		printk("malloc called with impossibly large argument (%d)\n",
 			len);
 		panic("malloc: bad arg");
@@ -158,11 +165,11 @@ void *malloc(unsigned int len)
 			panic("Out of memory in kernel malloc()");
 		/* Set up the chain of free objects */
 		for (i=PAGE_SIZE/bdir->size; i > 1; i--) {
-			*((char **) cp) = cp + bdir->size;
+			*((char **) cp) = cp + bdir->size;		// 将对象的开始4个字节设置成指向下一对象的指针
 			cp += bdir->size;
 		}
 		*((char **) cp) = 0;
-		bdesc->next = bdir->chain; /* OK, link it in! */
+		bdesc->next = bdir->chain; /* OK, link it in! 插入描述符链的链表头部 */
 		bdir->chain = bdesc;
 	}
 	retval = (void *) bdesc->freeptr;
@@ -178,6 +185,12 @@ void *malloc(unsigned int len)
  * search for the bucket descriptor.
  * 
  * We will #define a macro so that "free(x)" is becomes "free_s(x, 0)"
+ */
+/**
+ * @brief 释放对象内存
+ * 
+ * @param obj 对象地址（指针）
+ * @param size 对象的大小
  */
 void free_s(void *obj, int size)
 {
@@ -204,7 +217,7 @@ found:
 	cli(); /* To avoid race conditions */
 	*((void **)obj) = bdesc->freeptr;
 	bdesc->freeptr = obj;
-	bdesc->refcnt--;
+	bdesc->refcnt--;			// 计数不为0，直接结束即可；计数等于0，需要释放对应的内存页面和桶描述符
 	if (bdesc->refcnt == 0) {
 		/*
 		 * We need to make sure that prev is still accurate.  It
