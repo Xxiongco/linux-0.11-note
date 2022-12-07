@@ -20,6 +20,11 @@
  * Changes by tytso to allow root device specification
  */
 
+// Linux 内核源代码中的 tools 目录中包含一个生成内核磁盘映象文件的工具程序 build.c，该程序将
+// 单独编译成可执行文件，在 linux/目录下的 Makefile 文件中被调用运行，用于将所有内核编译代码连接
+// 和合并成一个可运行的内核映像文件 image
+
+
 #include <stdio.h>	/* fprintf */
 #include <string.h>
 #include <stdlib.h>	/* contains exit */
@@ -53,6 +58,20 @@ void usage(void)
 {
 	die("Usage: build bootsect setup system [rootdev] [> image]");
 }
+
+
+// build 程序使用 4 个参数，分别是 bootsect 文件名、setup 文件名、system 文件名和可选的根文件系
+// 统设备文件名。 
+//  程序首先检查命令行上最后一个根设备文件名可选参数，若其存在，则读取该设备文件的状态信息结
+// 构（stat），取出设备号。若命令行上不带该参数，则使用默认值。 
+//  然后对 bootsect 文件进行处理，读取该文件的 minix 执行头部信息，判断其有效性，然后读取随后
+// 512 字节的引导代码数据，判断其是否具有可引导标志 0xAA55，并将前面获取的根设备号写入到 508,509
+// 位移处，最后将该 512 字节代码数据写到 stdout 标准输出，由 Make 文件重定向到 Image 文件。
+// 接下来以类似的方法处理 setup 文件。若该文件长度小于 4 个扇区，则用 0 将其填满为 4 个扇区的长
+// 度，并写到标准输出 stdout 中。 
+//  最后处理 system 文件。该文件是使用 GCC 编译器产生，所以其执行头部格式是 GCC 类型的，与 linux
+// 定义的 a.out 格式一样。在判断执行入口点是 0 后，就将数据写到标准输出 stdout 中。若其代码数据长
+// 度超过 128KB，则显示出错信息。
 
 int main(int argc, char ** argv)
 {
