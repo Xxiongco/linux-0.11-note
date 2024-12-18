@@ -21,6 +21,42 @@
  * won't be any messing with the stack from main(), but we define
  * some others too.
  */
+
+
+
+/**
+unistd.h中#define _syscall0(type,name)
+
+#define _syscall0(type,name) \
+type name(void) \
+{ \
+long __res; \
+__asm__ volatile ("int $0x80" \
+	: "=a" (__res) \
+	: "0" (__NR_##name)); \
+if (__res >= 0) \
+	return (type) __res; \
+errno = -__res; \
+return -1; \
+}
+
+ 宏定义展开
+
+int fork(void) {
+     volatile long __res;
+    _asm {
+        //  eax 寄存器里的参数是 __NR_fork，这也是个宏定义，值是 2。对应sys.h中的sys_call_table数组的值是sys_fork
+        _asm mov eax,__NR_fork
+        // 0x80 号软中断的触发 0x80 号中断的处理函数是system_call
+        _asm int 80h
+        _asm mov __res,eax
+    }
+    if (__res >= 0)
+        return (void) __res;
+    errno = -__res;
+    return -1;
+}
+ */
 static inline _syscall0(int,fork)                  //inline is like #define, but expande in compile, and more flexible with variables
 static inline _syscall0(int,pause)
 static inline _syscall1(int,setup,void *,BIOS)     //0 for 0 variable, 1 for 1 variable
@@ -155,6 +191,7 @@ void main(void)		/* This really IS void, no error here. */
 	sti();
 	// 进程均为3特权等级，此处的进程0也需要翻转到3用户态模式
 	move_to_user_mode();
+    // fork() -> _syscall0
 	if (!fork()) {		/* we count on this going ok */       // 进程1
 		init();                                               //child process
 	}

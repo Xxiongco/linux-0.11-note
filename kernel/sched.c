@@ -118,6 +118,14 @@ void math_state_restore()
  * information in task[0] is never used.
  * 进程调度
  */
+
+/**
+ * 1. 拿到剩余时间片（counter的值）最大且在 runnable 状态（state = 0）的进程号 next。
+ * 2. 如果所有 runnable 进程时间片都为 0，则将所有进程（注意不仅仅是 runnable 的进程）的 counter
+ * 重新赋值（counter = counter/2 + priority），然后再次执行步骤 1。
+ * 3. 最后拿到了一个进程号 next，调用了 switch_to(next) 这个方法，就切换到了这个进程去执行了。
+ *
+ */
 void schedule(void)
 {
 	int i,next,c;
@@ -146,6 +154,7 @@ void schedule(void)
 		while (--i) {
 			if (!*--p)
 				continue;
+            // TASK_RUNNING	进程正在运行或已准备就绪，就绪态+运行态
 			if ((*p)->state == TASK_RUNNING && (*p)->counter > c)   //get counter_max 值
 				c = (*p)->counter, next = i;
 		}
@@ -155,6 +164,7 @@ void schedule(void)
 				(*p)->counter = ((*p)->counter >> 1) +
 						(*p)->priority;
 	}
+    // 切换进程
 	switch_to(next);
 }
 
@@ -328,6 +338,7 @@ void add_timer(long jiffies, void (*fn)(void))
 // 时钟中断 C 函数处理程序，
 // 每个时钟中断都要更新首个任务的定时器，
 // 然后进行相应的定时器处理程序，然后进行任务调度
+// 时钟中断函数
 void do_timer(long cpl)      //current priority level
 {
 	extern int beepcount;            // 扬声器发声时间滴答数
@@ -360,6 +371,7 @@ void do_timer(long cpl)      //current priority level
 	if ((--current->counter)>0) return;      // 当前线程还有剩余时间片，直接返回
 	current->counter=0;
 	if (!cpl) return;						 // 对于超级用户程序，不依赖 counter 值进行调度
+    // 调度
 	schedule();                              
 }
 
@@ -450,6 +462,7 @@ void sched_init(void)
 	outb_p(0x36,0x43);		/* binary, mode 3, LSB/MSB, ch 0 */
 	outb_p(LATCH & 0xff , 0x40);	/* LSB */
 	outb(LATCH >> 8 , 0x40);	/* MSB */             //  这四行代码就开启了这个定时器，之后这个定时器变会持续的、以一定频率的向 CPU 发出中断信号， 中断处理程序为 timer_interrupt
+    // 设置时钟中断，以及处理的函数
 	set_intr_gate(0x20,&timer_interrupt);
 	outb(inb_p(0x21)&~0x01,0x21);
 	set_system_gate(0x80,&system_call);          // 所有用户态程序想要调用内核提供的方法，都需要基于这个系统调用来进行

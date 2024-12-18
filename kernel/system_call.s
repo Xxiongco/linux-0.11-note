@@ -173,6 +173,7 @@ _device_not_available:
 	ret
 
 .align 2
+;//时钟终端函数
 _timer_interrupt:
 	push %ds		# save ds,es and put kernel data space
 	push %es		# into them. %fs is used by _system_call
@@ -192,6 +193,7 @@ _timer_interrupt:
 	movl CS(%esp),%eax
 	andl $3,%eax		# %eax is CPL (0 or 3, 0=supervisor)
 	pushl %eax
+	;// 调用这个
 	call _do_timer		# 'do_timer(long CPL)' does everything from
 	addl $4,%esp		# task switching to accounting ...
 	jmp ret_from_sys_call
@@ -205,7 +207,9 @@ _sys_execve:
 	ret
 
 .align 2
+;系统调用的sys_fork sys_call_table中的sys_fork
 _sys_fork:
+    ; fork.c中find_empty_process
 	call _find_empty_process
 	testl %eax,%eax
 	js 1f
@@ -214,6 +218,7 @@ _sys_fork:
 	pushl %edi
 	pushl %ebp
 	pushl %eax
+	; //复制进程 fork.c中copy_process
 	call _copy_process
 	addl $20,%esp
 1:	ret
