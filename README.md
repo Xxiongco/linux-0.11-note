@@ -1,5 +1,8 @@
 ## 说明
 
+该项目copy from https://gitee.com/shen-lifeng/linux-0.11-note
+我放这里只是方便我个人在其他地方看
+
 本项目fork了Linux0.11的源代码，在此基础上加入了大量中文注释，注释主要来源是《linux内核完全注释》，一小部分是本人自己添加的。
 
 对于linux内核源码有兴趣的朋友可以看一看 
